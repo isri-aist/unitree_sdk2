@@ -44,9 +44,9 @@ public:
         this);
 
     int report_period_us = report_dt_ * 1e6;
-    report_rpy_ptr_ = unitree::common::CreateRecurrentThreadEx(
-        "report_rpy", UT_CPU_ID_NONE, report_period_us,
-        &HumanoidExample::ReportRPY, this);
+    report_sensors_ptr_ = unitree::common::CreateRecurrentThreadEx(
+        "report_sensors", UT_CPU_ID_NONE, report_period_us,
+        &HumanoidExample::ReportSensors, this);
   }
 
   ~HumanoidExample() = default;
@@ -125,13 +125,39 @@ public:
     }
   }
 
-  void ReportRPY() {
+  void ReportSensors() {
     const std::shared_ptr<const BaseState> bs_tmp_ptr =
         base_state_buffer_.GetData();
+    const std::shared_ptr<const MotorState> ms_tmp_ptr =
+        motor_state_buffer_.GetData();
     if (bs_tmp_ptr) {
+      // Roll Pitch Yaw orientation
       std::cout << "rpy: [" << bs_tmp_ptr->rpy.at(0) << ", "
                 << bs_tmp_ptr->rpy.at(1) << ", " << bs_tmp_ptr->rpy.at(2) << "]"
                 << std::endl;
+      // Gyroscope
+      std::cout << "gyro: [" << bs_tmp_ptr->omega.at(0) << ", "
+                << bs_tmp_ptr->omega.at(1) << ", " << bs_tmp_ptr->omega.at(2) << "]"
+                << std::endl;
+      // Accelerometer
+      std::cout << "acc: [" << bs_tmp_ptr->acc.at(0) << ", "
+                << bs_tmp_ptr->acc.at(1) << ", " << bs_tmp_ptr->acc.at(2) << "]"
+                << std::endl;
+    }
+    if (ms_tmp_ptr) {
+      // Joint positions
+      std::cout << "mot_pos: [";
+      for (int i = 0; i < kNumMotors; ++i) {
+        std::cout << ms_tmp_ptr->q.at(i) << ", ";
+      }
+      std::cout << "]" << std::endl;
+
+      // Joint velocities
+      std::cout << "mot_vel: [";
+      for (int i = 0; i < kNumMotors; ++i) {
+        std::cout << ms_tmp_ptr->dq.at(i) << ", ";
+      }
+      std::cout << "]" << std::endl;
     }
   }
 
@@ -150,6 +176,7 @@ private:
     BaseState bs_tmp;
     bs_tmp.omega = msg.imu_state().gyroscope();
     bs_tmp.rpy = msg.imu_state().rpy();
+    bs_tmp.acc = msg.imu_state().accelerometer();
 
     base_state_buffer_.SetData(bs_tmp);
   }
@@ -197,5 +224,5 @@ private:
   // multithreading
   unitree::common::ThreadPtr command_writer_ptr_;
   unitree::common::ThreadPtr control_thread_ptr_;
-  unitree::common::ThreadPtr report_rpy_ptr_;
+  unitree::common::ThreadPtr report_sensors_ptr_;
 };
