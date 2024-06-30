@@ -13,23 +13,25 @@
 #include "base_state.h"
 #include "data_buffer.hpp"
 #include "motors.hpp"
+#include "cpuMLP/Types.h"
+#include "cpuMLP/Interface.hpp"
 
 static const std::string kTopicLowCommand = "rt/lowcmd";
 static const std::string kTopicLowState = "rt/lowstate";
 
 class HumanoidExample {
 public:
-  HumanoidExample(const std::string &networkInterface = "") {
+  HumanoidExample(const std::string &networkInterface = "") : mlpInterface_(43, 0, 10, 1, 1) {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 
-    lowcmd_publisher_.reset(
+    /*lowcmd_publisher_.reset(
         new unitree::robot::ChannelPublisher<unitree_go::msg::dds_::LowCmd_>(
             kTopicLowCommand));
     lowcmd_publisher_->InitChannel();
     command_writer_ptr_ = unitree::common::CreateRecurrentThreadEx(
         "command_writer", UT_CPU_ID_NONE, 2000,
-        &HumanoidExample::LowCommandWriter, this);
+        &HumanoidExample::LowCommandWriter, this);*/
 
     lowstate_subscriber_.reset(
         new unitree::robot::ChannelSubscriber<unitree_go::msg::dds_::LowState_>(
@@ -47,6 +49,24 @@ public:
     report_sensors_ptr_ = unitree::common::CreateRecurrentThreadEx(
         "report_sensors", UT_CPU_ID_NONE, report_period_us,
         &HumanoidExample::ReportSensors, this);
+
+    // Define default configuration
+    q_init_ << 0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6, -0.4, // Legs
+               0.0, 0.4, 0.0, 0.0, -0.4, 0.4, 0.0, 0.0, -0.4;  // Torso and arms
+
+    // Define Kp and Kd gains
+    kp_.fill(kp_low_);
+    kd_.fill(kd_low_);
+    kp_.head(11) << 200, 200, 200, 300, 40, 200, 200, 200, 300, 40, kp_high_;
+    kd_.head(11) << 5, 5, 5, 6, 2, 5, 5, 5, 6, 2, kd_high_;
+
+    // Create link with MLP
+    Vector7 scales;
+    scales << 0.5, 1.0, 1.0, 0.05, 2.0, 0.25, 5.0;
+    mlpInterface_.initialize(
+      "/checkpoints/", q_init_.head(10), scales
+    );
+
   }
 
   ~HumanoidExample() = default;
@@ -94,33 +114,63 @@ public:
 
     if (ms_tmp_ptr) {
       time_ += control_dt_;
-      time_ = std::clamp(time_, 0.f, init_duration_);
-      float ratio = time_ / init_duration_;
-      for (int i = 0; i < kNumMotors; ++i) {
-        motor_command_tmp.kp.at(i) = IsWeakMotor(i) ? kp_low_ : kp_high_;
-        motor_command_tmp.kd.at(i) = IsWeakMotor(i) ? kd_low_ : kd_high_;
-        motor_command_tmp.dq_ref.at(i) = 0.f;
-        motor_command_tmp.tau_ff.at(i) = 0.f;
 
+      if (time_ > init_duration_) {
+        const std::shared_ptr<const BaseState> bs_tmp_ptr = base_state_buffer_.GetData();
+        const std::shared_ptr<const MotorState> ms_tmp_ptr = motor_state_buffer_.GetData();
+
+        Vector10 pos, vel;
+        for (int i = 0; i < 10; ++i) {
+          pos(i) = ms_tmp_ptr->q.at(i);
+          vel(i) = ms_tmp_ptr->dq.at(i);
+        }
+        Vector4 ori(bs_tmp_ptr->quat.data());
+        Vector3 gyro(bs_tmp_ptr->omega.data());
+        mlpInterface_.update_observation(pos, vel, ori, gyro, time_);
+
+        std::cout << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose() << std::endl;
+
+        Vector10 network_cmd = q_init_.head(10);
         float q_des = 0.f;
-        if (i == JointIndex::kLeftHipPitch || i == JointIndex::kRightHipPitch) {
-          q_des = hip_pitch_init_pos_;
-        }
-        if (i == JointIndex::kLeftKnee || i == JointIndex::kRightKnee) {
-          q_des = knee_init_pos_;
-        }
-        if (i == JointIndex::kLeftAnkle || i == JointIndex::kRightAnkle) {
-          q_des = ankle_init_pos_;
-        }
-        if (i == JointIndex::kLeftShoulderPitch ||
-            i == JointIndex::kRightShoulderPitch) {
-          q_des = shoulder_pitch_init_pos_;
+        for (int i = 0; i < kNumMotors; ++i) {
+          q_des = i < 10 ? network_cmd(i) : q_init_(i);
+          motor_command_tmp.kp.at(i) = kp_(i);
+          motor_command_tmp.kd.at(i) = kd_(i);
+          motor_command_tmp.q_ref.at(i) = q_des;
+          motor_command_tmp.dq_ref.at(i) = 0.f;
+          motor_command_tmp.tau_ff.at(i) = 0.f;
         }
 
-        q_des = (q_des - ms_tmp_ptr->q.at(i)) * ratio + ms_tmp_ptr->q.at(i);
-        motor_command_tmp.q_ref.at(i) = q_des;
+      } else {
+        // Slowly move to default configuration
+
+        float ratio = std::clamp(time_, 0.f, init_duration_) / init_duration_;
+        for (int i = 0; i < kNumMotors; ++i) {
+          motor_command_tmp.kp.at(i) = IsWeakMotor(i) ? kp_low_ : kp_high_;
+          motor_command_tmp.kd.at(i) = IsWeakMotor(i) ? kd_low_ : kd_high_;
+          motor_command_tmp.dq_ref.at(i) = 0.f;
+          motor_command_tmp.tau_ff.at(i) = 0.f;
+
+          float q_des = 0.f;
+          if (i == JointIndex::kLeftHipPitch || i == JointIndex::kRightHipPitch) {
+            q_des = hip_pitch_init_pos_;
+          }
+          if (i == JointIndex::kLeftKnee || i == JointIndex::kRightKnee) {
+            q_des = knee_init_pos_;
+          }
+          if (i == JointIndex::kLeftAnkle || i == JointIndex::kRightAnkle) {
+            q_des = ankle_init_pos_;
+          }
+          if (i == JointIndex::kLeftShoulderPitch ||
+              i == JointIndex::kRightShoulderPitch) {
+            q_des = shoulder_pitch_init_pos_;
+          }
+
+          q_des = (q_des - ms_tmp_ptr->q.at(i)) * ratio + ms_tmp_ptr->q.at(i);
+          motor_command_tmp.q_ref.at(i) = q_des;
+        }
       }
-
+      // Write to command buffer
       motor_command_buffer_.SetData(motor_command_tmp);
     }
   }
@@ -175,6 +225,7 @@ private:
   void RecordBaseState(const unitree_go::msg::dds_::LowState_ &msg) {
     BaseState bs_tmp;
     bs_tmp.omega = msg.imu_state().gyroscope();
+    bs_tmp.quat = msg.imu_state().quaternion();
     bs_tmp.rpy = msg.imu_state().rpy();
     bs_tmp.acc = msg.imu_state().accelerometer();
 
@@ -203,18 +254,23 @@ private:
   DataBuffer<MotorCommand> motor_command_buffer_;
   DataBuffer<BaseState> base_state_buffer_;
 
+  // MLP interface
+  Interface mlpInterface_;
+
   // control params
   float kp_low_ = 60.f;
   float kp_high_ = 200.f;
   float kd_low_ = 1.5f;
   float kd_high_ = 5.f;
+  Vector19 kd_, kp_;
 
-  float control_dt_ = 0.01f;
+  float control_dt_ = 0.02f;
 
   float hip_pitch_init_pos_ = -0.5f;
   float knee_init_pos_ = 1.f;
   float ankle_init_pos_ = -0.5f;
   float shoulder_pitch_init_pos_ = 0.4f;
+  Vector19 q_init_;
 
   float time_ = 0.f;
   float init_duration_ = 10.f;
