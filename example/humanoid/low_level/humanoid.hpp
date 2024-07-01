@@ -116,7 +116,7 @@ public:
     if (ms_tmp_ptr) {
       time_ += control_dt_;
 
-      if (time_ > init_duration_) {
+      if (false) { // (time_ > init_duration_) {
         const std::shared_ptr<const BaseState> bs_tmp_ptr = base_state_buffer_.GetData();
         const std::shared_ptr<const MotorState> ms_tmp_ptr = motor_state_buffer_.GetData();
 
@@ -199,14 +199,14 @@ public:
       // Joint positions
       std::cout << "mot_pos: [";
       for (int i = 0; i < kNumMotors; ++i) {
-        std::cout << std::setprecision(4) << ms_tmp_ptr->q.at(i) << ", ";
+        std::cout << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]) << ", ";
       }
       std::cout << "]" << std::endl;
 
       // Joint velocities
       std::cout << "mot_vel: [";
       for (int i = 0; i < kNumMotors; ++i) {
-        std::cout << std::setprecision(4) << ms_tmp_ptr->dq.at(i) << ", ";
+        std::cout << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]) << ", ";
       }
       std::cout << "]" << std::endl;
     }
