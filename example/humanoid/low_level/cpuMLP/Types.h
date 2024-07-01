@@ -22,6 +22,7 @@ using Vector11 = Eigen::Matrix<float, 11, 1>;
 using Vector12 = Eigen::Matrix<float, 12, 1>;
 using Vector18 = Eigen::Matrix<float, 18, 1>;
 using Vector19 = Eigen::Matrix<float, 19, 1>;
+using Vector20 = Eigen::Matrix<float, 20, 1>;
 using Vector24 = Eigen::Matrix<float, 24, 1>;
 using Vector123 = Eigen::Matrix<float, 123, 1>;
 using Vector132 = Eigen::Matrix<float, 132, 1>;

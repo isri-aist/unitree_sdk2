@@ -52,7 +52,8 @@ public:
 
     // Define default configuration
     q_init_ << 0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6, -0.4, // Legs
-               0.0, 0.4, 0.0, 0.0, -0.4, 0.4, 0.0, 0.0, -0.4;  // Torso and arms
+               0.0, 0.4, 0.0, 0.0, -0.4, 0.4, 0.0, 0.0, -0.4,  // Torso and arms
+               0.0;  // Unused joint
 
     // Define Kp and Kd gains
     kp_.fill(kp_low_);
@@ -64,7 +65,7 @@ public:
     Vector7 scales;
     scales << 0.5, 1.0, 1.0, 0.05, 2.0, 0.25, 5.0;
     mlpInterface_.initialize(
-      "/checkpoints/", q_init_.head(10), scales
+      "/home/paleziart/git/policies/policy-2024-07-01/nn/", q_init_.head(10), scales
     );
 
   }
@@ -128,17 +129,17 @@ public:
         Vector3 gyro(bs_tmp_ptr->omega.data());
         mlpInterface_.update_observation(pos, vel, ori, gyro, time_);
 
-        std::cout << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose() << std::endl;
+        std::cout << std::setprecision(4) << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose() << std::endl;
 
         Vector10 network_cmd = q_init_.head(10);
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
           q_des = i < 10 ? network_cmd(i) : q_init_(i);
-          motor_command_tmp.kp.at(i) = kp_(i);
-          motor_command_tmp.kd.at(i) = kd_(i);
-          motor_command_tmp.q_ref.at(i) = q_des;
-          motor_command_tmp.dq_ref.at(i) = 0.f;
-          motor_command_tmp.tau_ff.at(i) = 0.f;
+          motor_command_tmp.kp.at(moti[i]) = kp_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = q_des;
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
 
       } else {
@@ -182,15 +183,15 @@ public:
         motor_state_buffer_.GetData();
     if (bs_tmp_ptr) {
       // Roll Pitch Yaw orientation
-      std::cout << "rpy: [" << bs_tmp_ptr->rpy.at(0) << ", "
+      std::cout << std::setprecision(4) << "rpy: [" << bs_tmp_ptr->rpy.at(0) << ", "
                 << bs_tmp_ptr->rpy.at(1) << ", " << bs_tmp_ptr->rpy.at(2) << "]"
                 << std::endl;
       // Gyroscope
-      std::cout << "gyro: [" << bs_tmp_ptr->omega.at(0) << ", "
+      std::cout << std::setprecision(4) << "gyro: [" << bs_tmp_ptr->omega.at(0) << ", "
                 << bs_tmp_ptr->omega.at(1) << ", " << bs_tmp_ptr->omega.at(2) << "]"
                 << std::endl;
       // Accelerometer
-      std::cout << "acc: [" << bs_tmp_ptr->acc.at(0) << ", "
+      std::cout << std::setprecision(4) << "acc: [" << bs_tmp_ptr->acc.at(0) << ", "
                 << bs_tmp_ptr->acc.at(1) << ", " << bs_tmp_ptr->acc.at(2) << "]"
                 << std::endl;
     }
@@ -198,14 +199,14 @@ public:
       // Joint positions
       std::cout << "mot_pos: [";
       for (int i = 0; i < kNumMotors; ++i) {
-        std::cout << ms_tmp_ptr->q.at(i) << ", ";
+        std::cout << std::setprecision(4) << ms_tmp_ptr->q.at(i) << ", ";
       }
       std::cout << "]" << std::endl;
 
       // Joint velocities
       std::cout << "mot_vel: [";
       for (int i = 0; i < kNumMotors; ++i) {
-        std::cout << ms_tmp_ptr->dq.at(i) << ", ";
+        std::cout << std::setprecision(4) << ms_tmp_ptr->dq.at(i) << ", ";
       }
       std::cout << "]" << std::endl;
     }
@@ -262,7 +263,7 @@ private:
   float kp_high_ = 200.f;
   float kd_low_ = 1.5f;
   float kd_high_ = 5.f;
-  Vector19 kd_, kp_;
+  Vector20 kd_, kp_;
 
   float control_dt_ = 0.02f;
 
@@ -270,7 +271,7 @@ private:
   float knee_init_pos_ = 1.f;
   float ankle_init_pos_ = -0.5f;
   float shoulder_pitch_init_pos_ = 0.4f;
-  Vector19 q_init_;
+  Vector20 q_init_;
 
   float time_ = 0.f;
   float init_duration_ = 10.f;

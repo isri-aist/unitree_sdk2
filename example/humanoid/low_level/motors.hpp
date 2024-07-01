@@ -51,6 +51,28 @@ enum JointIndex {
 
 };
 
+const int moti[20] = {JointIndex::kLeftHipYaw,
+                      JointIndex::kLeftHipRoll,
+                      JointIndex::kLeftHipPitch,
+                      JointIndex::kLeftKnee,
+                      JointIndex::kLeftAnkle,
+                      JointIndex::kRightHipYaw,
+                      JointIndex::kRightHipRoll,
+                      JointIndex::kRightHipPitch,
+                      JointIndex::kRightKnee,
+                      JointIndex::kRightAnkle,
+                      JointIndex::kWaistYaw,
+                      JointIndex::kLeftShoulderPitch,
+                      JointIndex::kLeftShoulderRoll,
+                      JointIndex::kLeftShoulderYaw,
+                      JointIndex::kLeftElbow,
+                      JointIndex::kRightShoulderPitch,
+                      JointIndex::kRightShoulderRoll,
+                      JointIndex::kRightShoulderYaw,
+                      JointIndex::kRightElbow,
+                      JointIndex::kNotUsedJoint
+};
+
 uint32_t Crc32Core(uint32_t *ptr, uint32_t len) {
   uint32_t xbit = 0;
   uint32_t data = 0;
