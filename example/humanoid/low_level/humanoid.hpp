@@ -120,7 +120,7 @@ public:
     int report_period_us = report_dt_ * 1e6;
     report_sensors_ptr_ = unitree::common::CreateRecurrentThreadEx(
         "report_sensors", UT_CPU_ID_NONE, report_period_us,
-        &HumanoidExample::ReportSensors, this);
+        &HumanoidExample::UpdateTables, this, false);
 
     // Define default configuration
     q_init_ << 0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6, -0.4, // Legs
@@ -141,7 +141,7 @@ public:
         scales);
 
     // Initialize tables for console display
-    InitializeTables();
+    UpdateTables(true);
 
     // Initialize sink for data logging
     fmtlog::setHeaderPattern("");
@@ -315,11 +315,23 @@ public:
     }
   }
 
-private:
-  void InitializeTables() {
-    // Set tables border style
-    table_IMU_.set_border_style(FT_NICE_STYLE);
-    table_joints_.set_border_style(FT_NICE_STYLE);
+  void UpdateTables(bool init=false) {
+
+    // Clear the console
+    std::cout << u8"\033[2J";
+
+    if(init) {
+      // Set tables border style
+      table_IMU_.set_border_style(FT_NICE_STYLE);
+      table_joints_.set_border_style(FT_NICE_STYLE);
+
+      // Initialize headers
+      table_IMU_.set_cur_cell(0, 0);
+      table_joints_.set_cur_cell(0, 0);
+      table_IMU_ << fort::header << "" << "X" << "Y" << "Z" << fort::endr;
+      table_joints_ << fort::header << "" << "L Yaw" << "L Roll" << "L Pitch" << "L Knee" << "L Ank";
+      table_joints_ << "R Yaw" << "R Roll" << "R Pitch" << "R Knee" << "R Ank" << fort::endr;
+    }
 
     // Fill tables with data
     const std::shared_ptr<const BaseState> bs_tmp_ptr =
@@ -327,6 +339,7 @@ private:
     const std::shared_ptr<const MotorState> ms_tmp_ptr =
         motor_state_buffer_.GetData();
 
+<<<<<<< HEAD
     table_IMU_ << "RPY";
     table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->rpy),
                               std::end(bs_tmp_ptr->rpy));
@@ -341,13 +354,29 @@ private:
     table_joints_ << fort::endr << "Vel";
     for (int i = 0; i < kNumMotors; ++i) {
       table_joints_ << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]);
+=======
+    // Set current cell to start of second row
+    table_IMU_.set_cur_cell(1, 0);
+    table_joints_.set_cur_cell(1, 0);
+
+    // Fill IMU data
+    if (bs_tmp_ptr) {
+      table_IMU_ << "RPY";
+      for (int i = 0; i < 3; ++i) {
+        table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->rpy.at(i);
+      }
+      table_IMU_ << fort::endr << fort::separator << "Gyro";
+      for (int i = 0; i < 3; ++i) {
+        table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->omega.at(i);
+      }
+      table_IMU_ << fort::endr << fort::separator << "Acc";
+      for (int i = 0; i < 3; ++i) {
+        table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->acc.at(i);
+      }
+>>>>>>> Work on console display
     }
-    table_joints_ << fort::endr;
 
-    // Set text style
-    table_IMU_.column(0).set_cell_content_text_style(fort::text_style::bold);
-    table_joints_.column(0).set_cell_content_text_style(fort::text_style::bold);
-
+<<<<<<< HEAD
     // Set alignment
     table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
     for (int i = 1; i < 4; ++i) {
@@ -356,6 +385,42 @@ private:
     table_joints_.column(0).set_cell_text_align(fort::text_align::center);
     for (int i = 1; i < 13; ++i) {
       table_joints_.column(i).set_cell_text_align(fort::text_align::right);
+=======
+    // Fill joint data
+    if (ms_tmp_ptr) {
+      table_joints_ << "Pos";
+      for (int i = 0; i < 10; ++i) {
+        table_joints_ << std::fixed << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]);
+      }
+      table_joints_ << fort::endr << fort::separator << "Vel";
+      for (int i = 0; i < 10; ++i) {
+        table_joints_ << std::fixed << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]);
+      }
+      table_joints_ << fort::endr;
+    }
+
+    if (init) {
+      // Set text style
+      table_IMU_.row(0).set_cell_content_text_style(fort::text_style::bold);
+      table_IMU_.column(0).set_cell_content_text_style(fort::text_style::bold);
+      table_joints_.column(0).set_cell_content_text_style(fort::text_style::bold);
+
+      // Set alignment
+      table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
+      for (int i = 1; i < 4; ++i) {
+          table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
+          table_IMU_.column(i).set_cell_min_width(9);
+      }
+      table_IMU_[0][1].set_cell_text_align(fort::text_align::center);
+      table_IMU_[0][2].set_cell_text_align(fort::text_align::center);
+      table_IMU_[0][3].set_cell_text_align(fort::text_align::center);
+
+      table_joints_.column(0).set_cell_text_align(fort::text_align::center);
+      for (int i = 1; i < 11; ++i) {
+          table_joints_.column(i).set_cell_text_align(fort::text_align::right);
+          table_joints_.column(i).set_cell_min_width(9);
+      }
+>>>>>>> Work on console display
     }
 
     std::cout << table_IMU_.to_string() << std::endl;
@@ -383,6 +448,7 @@ private:
     logi("{}", *bs_tmp_ptr);
   }
 
+private:
   void RecordMotorState(const unitree_go::msg::dds_::LowState_ &msg) {
     MotorState ms_tmp;
     for (int i = 0; i < kNumMotors; ++i) {
