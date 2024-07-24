@@ -15,6 +15,10 @@
 #include "motors.hpp"
 #include "cpuMLP/Types.h"
 #include "cpuMLP/Interface.hpp"
+#include "lib/fort.hpp"
+#include "lib/fort.c"
+#include "data_tamer/data_tamer.hpp"
+#include "data_tamer/sinks/mcap_sink.hpp"
 
 static const std::string kTopicLowCommand = "rt/lowcmd";
 static const std::string kTopicLowState = "rt/lowstate";
@@ -67,6 +71,12 @@ public:
     mlpInterface_.initialize(
       "/home/paleziart/git/policies/policy-2024-07-01/nn/", q_init_.head(10), scales
     );
+
+    // Initialize tables for console display
+    InitializeTables();
+
+    // Initialize sink for data logging
+    log_channel_->addDataSink(mcap_sink_);
 
   }
 
@@ -213,6 +223,69 @@ public:
   }
 
 private:
+  void InitializeTables() {
+    // Set tables border style
+    table_IMU_.set_border_style(FT_NICE_STYLE);
+    table_joints_.set_border_style(FT_NICE_STYLE);
+
+    // Fill tables with data
+    const std::shared_ptr<const BaseState> bs_tmp_ptr =
+        base_state_buffer_.GetData();
+    const std::shared_ptr<const MotorState> ms_tmp_ptr =
+        motor_state_buffer_.GetData();
+
+    table_IMU_ << "RPY";
+    table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->rpy), std::end(bs_tmp_ptr->rpy));
+    table_IMU_ << "Gyro";
+    table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->omega), std::end(bs_tmp_ptr->omega));
+
+    table_joints_ << "Pos";
+    for (int i = 0; i < kNumMotors; ++i) {
+        table_joints_ << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]);
+      }
+    table_joints_ << fort::endr << "Vel";
+    for (int i = 0; i < kNumMotors; ++i) {
+        table_joints_ << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]);
+    }
+    table_joints_ << fort::endr;
+
+    // Set text style
+    table_IMU_.column(0).set_cell_content_text_style(fort::text_style::bold);
+    table_joints_.column(0).set_cell_content_text_style(fort::text_style::bold);
+
+    // Set alignment
+    table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
+    for (int i = 1; i < 4; ++i) {
+        table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
+    }
+    table_joints_.column(0).set_cell_text_align(fort::text_align::center);
+    for (int i = 1; i < 13; ++i) {
+        table_joints_.column(i).set_cell_text_align(fort::text_align::right);
+    }
+
+    std::cout << table_IMU_.to_string() << std::endl;
+    std::cout << table_joints_.to_string() << std::endl;
+
+  }
+
+  void LogAll() {
+
+    // Retrieve and store data
+    const std::shared_ptr<const MotorState> ms_tmp_ptr =
+        motor_state_buffer_.GetData();
+    const std::shared_ptr<const MotorCommand> mc_tmp_ptr =
+        motor_command_buffer_.GetData();
+    const std::shared_ptr<const BaseState> bs_tmp_ptr =
+        base_state_buffer_.GetData();
+
+    log_motor_state_ = *ms_tmp_ptr;
+    log_motor_cmd_ = *mc_tmp_ptr;
+    log_base_state_ = *bs_tmp_ptr;
+
+    // Log all monitored variables
+    log_channel_->takeSnapshot();
+  }
+
   void RecordMotorState(const unitree_go::msg::dds_::LowState_ &msg) {
     MotorState ms_tmp;
     for (int i = 0; i < kNumMotors; ++i) {
@@ -282,4 +355,18 @@ private:
   unitree::common::ThreadPtr command_writer_ptr_;
   unitree::common::ThreadPtr control_thread_ptr_;
   unitree::common::ThreadPtr report_sensors_ptr_;
+
+  // Table for console display
+  fort::char_table table_IMU_;
+  fort::char_table table_joints_;
+
+  // Variables for data logging
+  MotorState log_motor_state_;
+  MotorCommand log_motor_cmd_;
+  BaseState log_base_state_;
+
+  // Sink and channel for logging
+  std::shared_ptr<DataTamer::MCAPSink> mcap_sink_ = std::make_shared<DataTamer::MCAPSink>("mylog.mcap");
+  std::shared_ptr<DataTamer::LogChannel> log_channel_ = DataTamer::LogChannel::create("my_channel");
+
 };
