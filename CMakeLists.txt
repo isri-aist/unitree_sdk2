@@ -31,6 +31,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}
 ## Check system architecture
 message(STATUS "Current system architecture: ${CMAKE_SYSTEM_PROCESSOR}")
 
+# Import data tamer library
+add_subdirectory(data_tamer/data_tamer_cpp)
+
 ## Import thirdparty libraries
 add_subdirectory(thirdparty)
 
@@ -55,6 +58,10 @@ target_link_libraries(unitree_sdk2 INTERFACE ddsc ddscxx Threads::Threads)
 target_include_directories(unitree_sdk2 INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
+
+# Link data tamer and libfort libraries
+target_link_libraries(unitree_sdk2 INTERFACE data_tamer)
+target_include_directories(unitree_sdk2 INTERFACE libfort)
 
 if (BUILD_EXAMPLES)
     add_subdirectory(example)
