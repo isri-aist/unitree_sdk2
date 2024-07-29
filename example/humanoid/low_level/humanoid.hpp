@@ -219,8 +219,8 @@ public:
 
         Vector10 pos, vel;
         for (int i = 0; i < 10; ++i) {
-          pos(i) = ms_tmp_ptr->q.at(i);
-          vel(i) = ms_tmp_ptr->dq.at(i);
+          pos(i) = ms_tmp_ptr->q.at(moti[i]);
+          vel(i) = ms_tmp_ptr->dq.at(moti[i]);
         }
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
