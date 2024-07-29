@@ -8,6 +8,7 @@ option(BUILD_EXAMPLES "Build examples" ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 ## Chosse build type
 set(default_build_type "Release")
