@@ -60,7 +60,8 @@ target_include_directories(unitree_sdk2 INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
 
-# Link data tamer and libfort libraries
+# Link fmt and libfort libraries
+target_link_libraries(unitree_sdk2 INTERFACE fmt)
 target_include_directories(unitree_sdk2 INTERFACE fmtlog)
 target_include_directories(unitree_sdk2 INTERFACE libfort)
 

@@ -146,7 +146,6 @@ public:
     // Initialize sink for data logging
     fmtlog::setHeaderPattern("");
     fmtlog::setLogFile(getCurrentDateTime());
-    fmtlog::setLogFile("test_log.txt");
     fmtlog::setFlushDelay(100000000);
     fmtlog::startPollingThread(100000000);
   }
@@ -275,6 +274,9 @@ public:
       }
       // Write to command buffer
       motor_command_buffer_.SetData(motor_command_tmp);
+
+      // Log sensors and commands
+      LogAll();
     }
   }
 
@@ -339,22 +341,6 @@ public:
     const std::shared_ptr<const MotorState> ms_tmp_ptr =
         motor_state_buffer_.GetData();
 
-<<<<<<< HEAD
-    table_IMU_ << "RPY";
-    table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->rpy),
-                              std::end(bs_tmp_ptr->rpy));
-    table_IMU_ << "Gyro";
-    table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->omega),
-                              std::end(bs_tmp_ptr->omega));
-
-    table_joints_ << "Pos";
-    for (int i = 0; i < kNumMotors; ++i) {
-      table_joints_ << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]);
-    }
-    table_joints_ << fort::endr << "Vel";
-    for (int i = 0; i < kNumMotors; ++i) {
-      table_joints_ << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]);
-=======
     // Set current cell to start of second row
     table_IMU_.set_cur_cell(1, 0);
     table_joints_.set_cur_cell(1, 0);
@@ -373,19 +359,8 @@ public:
       for (int i = 0; i < 3; ++i) {
         table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->acc.at(i);
       }
->>>>>>> Work on console display
     }
 
-<<<<<<< HEAD
-    // Set alignment
-    table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
-    for (int i = 1; i < 4; ++i) {
-      table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
-    }
-    table_joints_.column(0).set_cell_text_align(fort::text_align::center);
-    for (int i = 1; i < 13; ++i) {
-      table_joints_.column(i).set_cell_text_align(fort::text_align::right);
-=======
     // Fill joint data
     if (ms_tmp_ptr) {
       table_joints_ << "Pos";
@@ -420,9 +395,11 @@ public:
           table_joints_.column(i).set_cell_text_align(fort::text_align::right);
           table_joints_.column(i).set_cell_min_width(9);
       }
->>>>>>> Work on console display
     }
 
+    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+    std::cout << "    ┃    Sensor Data    ┃" << std::endl;
+    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
     std::cout << table_IMU_.to_string() << std::endl;
     std::cout << table_joints_.to_string() << std::endl;
   }
@@ -437,15 +414,17 @@ public:
     const std::shared_ptr<const BaseState> bs_tmp_ptr =
         base_state_buffer_.GetData();
 
-    log_motor_state_ = *ms_tmp_ptr;
-    log_motor_cmd_ = *mc_tmp_ptr;
-    log_base_state_ = *bs_tmp_ptr;
-
     // Log all monitored variables
     logi("time,{}", time_);
-    logi("{}", *ms_tmp_ptr);
-    logi("{}", *mc_tmp_ptr);
-    logi("{}", *bs_tmp_ptr);
+    if (ms_tmp_ptr) {
+      logi("{}", *ms_tmp_ptr);
+    }
+    if (mc_tmp_ptr) {
+      logi("{}", *mc_tmp_ptr);
+    }
+    if (bs_tmp_ptr) {
+      logi("{}", *bs_tmp_ptr);
+    }
   }
 
 private:
@@ -523,8 +502,4 @@ private:
   fort::char_table table_IMU_;
   fort::char_table table_joints_;
 
-  // Variables for data logging
-  MotorState log_motor_state_;
-  MotorCommand log_motor_cmd_;
-  BaseState log_base_state_;
 };
