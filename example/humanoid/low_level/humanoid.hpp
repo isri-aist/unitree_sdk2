@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ctime>
+#include <iomanip>
 #include <iostream>
 #include <stdint.h>
 #include <string>
@@ -11,21 +13,87 @@
 #include <unitree/idl/go2/LowState_.hpp>
 
 #include "base_state.h"
-#include "data_buffer.hpp"
-#include "motors.hpp"
-#include "cpuMLP/Types.h"
 #include "cpuMLP/Interface.hpp"
-#include "lib/fort.hpp"
+#include "cpuMLP/Types.h"
+#include "data_buffer.hpp"
 #include "lib/fort.c"
-#include "data_tamer/data_tamer.hpp"
-#include "data_tamer/sinks/mcap_sink.hpp"
+#include "lib/fort.hpp"
+#include "motors.hpp"
+
+#define FMT_HEADER_ONLY
+#include "fmtlog-inl.h"
+#include "fmtlog.h"
 
 static const std::string kTopicLowCommand = "rt/lowcmd";
 static const std::string kTopicLowState = "rt/lowstate";
 
+template <typename T, size_t N>
+std::string arrayToStringView(const std::array<T, N> &arr) {
+  std::ostringstream oss;
+  for (size_t i = 0; i < N; ++i) {
+    oss << arr[i];
+    if (i < N - 1) {
+      oss << ",";
+    }
+  }
+  return oss.str();
+}
+
+template <> struct fmt::formatter<BaseState> : formatter<string_view> {
+  // parse is inherited from formatter<string_view>.
+  template <typename FormatContext>
+  auto format(BaseState bs, FormatContext &ctx) {
+
+    const std::string quat = "quat," + arrayToStringView(bs.quat);
+    const std::string rpy = "rpy," + arrayToStringView(bs.rpy);
+    const std::string omega = "omega," + arrayToStringView(bs.omega);
+    const std::string acc = "acc," + arrayToStringView(bs.acc);
+    const std::string all = quat + "\n" + rpy + "\n" + omega + "\n" + acc;
+
+    string_view name = all;
+
+    return formatter<string_view>::format(name, ctx);
+  }
+};
+
+template <> struct fmt::formatter<MotorState> : formatter<string_view> {
+  // parse is inherited from formatter<string_view>.
+  template <typename FormatContext>
+  auto format(MotorState ms, FormatContext &ctx) {
+
+    const std::string q = "q," + arrayToStringView(ms.q);
+    const std::string dq = "dq," + arrayToStringView(ms.dq);
+    const std::string all = q + "\n" + dq;
+
+    string_view name = all;
+
+    return formatter<string_view>::format(name, ctx);
+  }
+};
+
+template <> struct fmt::formatter<MotorCommand> : formatter<string_view> {
+  // parse is inherited from formatter<string_view>.
+  template <typename FormatContext>
+  auto format(MotorCommand mc, FormatContext &ctx) {
+
+    const std::string q_ref = "q_ref," + arrayToStringView(mc.q_ref);
+    const std::string dq_ref = "dq_ref," + arrayToStringView(mc.dq_ref);
+    const std::string kp = "kp," + arrayToStringView(mc.kp);
+    const std::string kd = "kd," + arrayToStringView(mc.kd);
+    const std::string tau_ff = "tau_ff," + arrayToStringView(mc.tau_ff);
+    const std::string all =
+        q_ref + "\n" + dq_ref + "\n" + kp + "\n" + kd + "\n" + tau_ff;
+
+    string_view name = all;
+
+    return formatter<string_view>::format(name, ctx);
+  }
+};
+
 class HumanoidExample {
 public:
-  HumanoidExample(const std::string &networkInterface = "") : mlpInterface_(43, 0, 10, 1, 1) {
+  HumanoidExample(const std::string &networkInterface = "")
+      : mlpInterface_(43, 0, 10, 1, 1) {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 
@@ -56,8 +124,8 @@ public:
 
     // Define default configuration
     q_init_ << 0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6, -0.4, // Legs
-               0.0, 0.4, 0.0, 0.0, -0.4, 0.4, 0.0, 0.0, -0.4,  // Torso and arms
-               0.0;  // Unused joint
+        0.0, 0.4, 0.0, 0.0, -0.4, 0.4, 0.0, 0.0, -0.4, // Torso and arms
+        0.0;                                           // Unused joint
 
     // Define Kp and Kd gains
     kp_.fill(kp_low_);
@@ -69,18 +137,32 @@ public:
     Vector7 scales;
     scales << 0.5, 1.0, 1.0, 0.05, 2.0, 0.25, 5.0;
     mlpInterface_.initialize(
-      "/home/paleziart/git/policies/policy-2024-07-01/nn/", q_init_.head(10), scales
-    );
+        "/home/paleziart/git/policies/policy-2024-07-01/nn/", q_init_.head(10),
+        scales);
 
     // Initialize tables for console display
     InitializeTables();
 
     // Initialize sink for data logging
-    log_channel_->addDataSink(mcap_sink_);
-
+    fmtlog::setHeaderPattern("");
+    fmtlog::setLogFile(getCurrentDateTime());
+    fmtlog::setLogFile("test_log.txt");
+    fmtlog::setFlushDelay(100000000);
+    fmtlog::startPollingThread(100000000);
   }
 
   ~HumanoidExample() = default;
+
+  char *getCurrentDateTime() {
+    std::time_t t = std::time(nullptr);
+    std::tm tm = *std::localtime(&t);
+    std::stringstream ss;
+    ss << std::put_time(&tm, "%Y-%m-%d_%H-%M-%S.txt");
+    char *result = new char[ss.str().length() + 1];
+    std::strcpy(result, ss.str().c_str());
+
+    return result;
+  }
 
   void LowCommandWriter() {
     unitree_go::msg::dds_::LowCmd_ dds_low_command{};
@@ -127,8 +209,10 @@ public:
       time_ += control_dt_;
 
       if (false) { // (time_ > init_duration_) {
-        const std::shared_ptr<const BaseState> bs_tmp_ptr = base_state_buffer_.GetData();
-        const std::shared_ptr<const MotorState> ms_tmp_ptr = motor_state_buffer_.GetData();
+        const std::shared_ptr<const BaseState> bs_tmp_ptr =
+            base_state_buffer_.GetData();
+        const std::shared_ptr<const MotorState> ms_tmp_ptr =
+            motor_state_buffer_.GetData();
 
         Vector10 pos, vel;
         for (int i = 0; i < 10; ++i) {
@@ -139,7 +223,10 @@ public:
         Vector3 gyro(bs_tmp_ptr->omega.data());
         mlpInterface_.update_observation(pos, vel, ori, gyro, time_);
 
-        std::cout << std::setprecision(4) << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose() << std::endl;
+        std::cout
+            << std::setprecision(4)
+            << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
+            << std::endl;
 
         Vector10 network_cmd = q_init_.head(10);
         float q_des = 0.f;
@@ -163,7 +250,8 @@ public:
           motor_command_tmp.tau_ff.at(i) = 0.f;
 
           float q_des = 0.f;
-          if (i == JointIndex::kLeftHipPitch || i == JointIndex::kRightHipPitch) {
+          if (i == JointIndex::kLeftHipPitch ||
+              i == JointIndex::kRightHipPitch) {
             q_des = hip_pitch_init_pos_;
           }
           if (i == JointIndex::kLeftKnee || i == JointIndex::kRightKnee) {
@@ -193,17 +281,17 @@ public:
         motor_state_buffer_.GetData();
     if (bs_tmp_ptr) {
       // Roll Pitch Yaw orientation
-      std::cout << std::setprecision(4) << "rpy: [" << bs_tmp_ptr->rpy.at(0) << ", "
-                << bs_tmp_ptr->rpy.at(1) << ", " << bs_tmp_ptr->rpy.at(2) << "]"
-                << std::endl;
+      std::cout << std::setprecision(4) << "rpy: [" << bs_tmp_ptr->rpy.at(0)
+                << ", " << bs_tmp_ptr->rpy.at(1) << ", "
+                << bs_tmp_ptr->rpy.at(2) << "]" << std::endl;
       // Gyroscope
-      std::cout << std::setprecision(4) << "gyro: [" << bs_tmp_ptr->omega.at(0) << ", "
-                << bs_tmp_ptr->omega.at(1) << ", " << bs_tmp_ptr->omega.at(2) << "]"
-                << std::endl;
+      std::cout << std::setprecision(4) << "gyro: [" << bs_tmp_ptr->omega.at(0)
+                << ", " << bs_tmp_ptr->omega.at(1) << ", "
+                << bs_tmp_ptr->omega.at(2) << "]" << std::endl;
       // Accelerometer
-      std::cout << std::setprecision(4) << "acc: [" << bs_tmp_ptr->acc.at(0) << ", "
-                << bs_tmp_ptr->acc.at(1) << ", " << bs_tmp_ptr->acc.at(2) << "]"
-                << std::endl;
+      std::cout << std::setprecision(4) << "acc: [" << bs_tmp_ptr->acc.at(0)
+                << ", " << bs_tmp_ptr->acc.at(1) << ", "
+                << bs_tmp_ptr->acc.at(2) << "]" << std::endl;
     }
     if (ms_tmp_ptr) {
       // Joint positions
@@ -235,17 +323,19 @@ private:
         motor_state_buffer_.GetData();
 
     table_IMU_ << "RPY";
-    table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->rpy), std::end(bs_tmp_ptr->rpy));
+    table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->rpy),
+                              std::end(bs_tmp_ptr->rpy));
     table_IMU_ << "Gyro";
-    table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->omega), std::end(bs_tmp_ptr->omega));
+    table_IMU_.range_write_ln(std::begin(bs_tmp_ptr->omega),
+                              std::end(bs_tmp_ptr->omega));
 
     table_joints_ << "Pos";
     for (int i = 0; i < kNumMotors; ++i) {
-        table_joints_ << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]);
-      }
+      table_joints_ << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]);
+    }
     table_joints_ << fort::endr << "Vel";
     for (int i = 0; i < kNumMotors; ++i) {
-        table_joints_ << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]);
+      table_joints_ << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]);
     }
     table_joints_ << fort::endr;
 
@@ -256,16 +346,15 @@ private:
     // Set alignment
     table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
     for (int i = 1; i < 4; ++i) {
-        table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
+      table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
     }
     table_joints_.column(0).set_cell_text_align(fort::text_align::center);
     for (int i = 1; i < 13; ++i) {
-        table_joints_.column(i).set_cell_text_align(fort::text_align::right);
+      table_joints_.column(i).set_cell_text_align(fort::text_align::right);
     }
 
     std::cout << table_IMU_.to_string() << std::endl;
     std::cout << table_joints_.to_string() << std::endl;
-
   }
 
   void LogAll() {
@@ -283,7 +372,10 @@ private:
     log_base_state_ = *bs_tmp_ptr;
 
     // Log all monitored variables
-    log_channel_->takeSnapshot();
+    logi("time,{}", time_);
+    logi("{}", *ms_tmp_ptr);
+    logi("{}", *mc_tmp_ptr);
+    logi("{}", *bs_tmp_ptr);
   }
 
   void RecordMotorState(const unitree_go::msg::dds_::LowState_ &msg) {
@@ -346,7 +438,7 @@ private:
   float shoulder_pitch_init_pos_ = 0.4f;
   Vector20 q_init_;
 
-  float time_ = 0.f;
+  float time_ = 0.f; //! Current time
   float init_duration_ = 10.f;
 
   float report_dt_ = 0.1f;
@@ -364,9 +456,4 @@ private:
   MotorState log_motor_state_;
   MotorCommand log_motor_cmd_;
   BaseState log_base_state_;
-
-  // Sink and channel for logging
-  std::shared_ptr<DataTamer::MCAPSink> mcap_sink_ = std::make_shared<DataTamer::MCAPSink>("mylog.mcap");
-  std::shared_ptr<DataTamer::LogChannel> log_channel_ = DataTamer::LogChannel::create("my_channel");
-
 };
