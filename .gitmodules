@@ -2,3 +2,6 @@
 	path = libfort
 	url = https://github.com/seleznevae/libfort.git
 
+[submodule "fmtlog"]
+	path = fmtlog
+	url = https://github.com/MengRao/fmtlog.git
