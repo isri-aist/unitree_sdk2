@@ -1,6 +1,4 @@
 [submodule "libfort"]
 	path = libfort
 	url = https://github.com/seleznevae/libfort.git
-[submodule "data_tamer"]
-	path = data_tamer
-	url = https://github.com/PickNikRobotics/data_tamer.git
+
