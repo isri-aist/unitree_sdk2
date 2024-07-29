@@ -153,6 +153,7 @@ public:
 
   ~HumanoidExample() = default;
 
+  // Get the current date in local time
   char *getCurrentDateTime() {
     std::time_t t = std::time(nullptr);
     std::tm tm = *std::localtime(&t);
@@ -164,6 +165,7 @@ public:
     return result;
   }
 
+  // Prepare the command message and send it to the publisher
   void LowCommandWriter() {
     unitree_go::msg::dds_::LowCmd_ dds_low_command{};
     dds_low_command.head()[0] = 0xFE;
@@ -192,6 +194,7 @@ public:
     }
   }
 
+  // Update motor and base states using received sensor message
   void LowStateHandler(const void *message) {
     unitree_go::msg::dds_::LowState_ low_state =
         *(unitree_go::msg::dds_::LowState_ *)message;
@@ -200,6 +203,7 @@ public:
     RecordBaseState(low_state);
   }
 
+  // Take decisions for the next commands and send them to the motor command buffer
   void Control() {
     MotorCommand motor_command_tmp;
     const std::shared_ptr<const MotorState> ms_tmp_ptr =
@@ -274,6 +278,7 @@ public:
     }
   }
 
+  // Print sensor data to the terminal
   void ReportSensors() {
     const std::shared_ptr<const BaseState> bs_tmp_ptr =
         base_state_buffer_.GetData();
@@ -438,7 +443,7 @@ private:
   float shoulder_pitch_init_pos_ = 0.4f;
   Vector20 q_init_;
 
-  float time_ = 0.f; //! Current time
+  float time_ = 0.f;
   float init_duration_ = 10.f;
 
   float report_dt_ = 0.1f;
