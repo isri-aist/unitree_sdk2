@@ -205,20 +205,19 @@ public:
     if (ms_tmp_ptr) {
       time_ += control_dt_;
 
-      if (false) { // (time_ > init_duration_) {
+      Vector20 pos, vel;
+      for (int i = 0; i < kNumMotors; ++i) {
+        pos(i) = ms_tmp_ptr->q.at(moti[i]);
+        vel(i) = ms_tmp_ptr->dq.at(moti[i]);
+      }
         const std::shared_ptr<const BaseState> bs_tmp_ptr =
             base_state_buffer_.GetData();
         const std::shared_ptr<const MotorState> ms_tmp_ptr =
             motor_state_buffer_.GetData();
 
-        Vector10 pos, vel;
-        for (int i = 0; i < 10; ++i) {
-          pos(i) = ms_tmp_ptr->q.at(moti[i]);
-          vel(i) = ms_tmp_ptr->dq.at(moti[i]);
-        }
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
-        mlpInterface_.update_observation(pos, vel, ori, gyro, time_);
+        mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro, time_);
 
         std::cout
             << std::setprecision(4)
