@@ -122,11 +122,6 @@ public:
         "report_sensors", UT_CPU_ID_NONE, report_period_us,
         &HumanoidExample::UpdateTables, this, false);
 
-    // Define default configuration
-    q_init_ << 0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6, -0.4, // Legs
-        0.0, 0.4, 0.0, 0.0, -0.4, 0.4, 0.0, 0.0, -0.4, // Torso and arms
-        0.0;                                           // Unused joint
-
     // Define Kp and Kd gains
     kp_.fill(kp_low_);
     kd_.fill(kd_low_);
@@ -485,7 +480,19 @@ private:
   float knee_init_pos_ = 1.f;
   float ankle_init_pos_ = -0.5f;
   float shoulder_pitch_init_pos_ = 0.4f;
-  Vector20 q_init_;
+  // Default configuration
+  const Vector20 q_init_ {
+    0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6, -0.4, // Legs
+    0.0, 0.4, 0.0, 0.0, -0.4, 0.4, 0.0, 0.0, -0.4,        // Torso and arms
+    0.0 };                                                // Unused joint
+  const Vector20 q_lim_lower {
+    -0.43, -0.43, -3.14, -0.26, -0.87, -0.43, -0.43, -3.14, -0.26, -0.87, // Legs
+    -2.35, -2.87, -0.34, -1.3, -1.25, -2.87, -3.11, -4.45, -1.25,         // Torso and arms
+    0.0 }; // Unused joint
+  const Vector20 q_lim_upper {
+    0.43, 0.43, 2.53, 2.05, 0.52, 0.43, 0.43, 2.53, 2.05, 0.52, // Legs
+    2.35, 2.87, 3.11, 4.45, 2.61, 2.87, 0.34, 1.3, 2.61,        // Torso and arms
+    0.0 }; // Unused joint
 
   float time_ = 0.f;
   float init_duration_ = 10.f;
