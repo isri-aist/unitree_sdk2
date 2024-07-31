@@ -480,9 +480,9 @@ private:
 
   float control_dt_ = 0.02f;
 
-  float hip_pitch_init_pos_ = -0.5f;
-  float knee_init_pos_ = 1.f;
-  float ankle_init_pos_ = -0.5f;
+  float hip_pitch_init_pos_ = -0.2f;
+  float knee_init_pos_ = 0.6f;
+  float ankle_init_pos_ = -0.4f;
   float shoulder_pitch_init_pos_ = 0.4f;
   float elbow_init_pos_ = -0.4f;
 
