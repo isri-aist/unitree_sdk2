@@ -210,6 +210,21 @@ public:
         pos(i) = ms_tmp_ptr->q.at(moti[i]);
         vel(i) = ms_tmp_ptr->dq.at(moti[i]);
       }
+      // Check if joints are too close from position limits
+      const bool lim_lower = ((pos - 0.8 * q_lim_lower).array() < 0.0).any();
+      const bool lim_upper = ((pos - 0.8 * q_lim_upper).array() > 0.0).any();
+      if (lim_lower || lim_upper) {emergency_damping_ = true;}
+
+      if (emergency_damping_) {
+        // Emergency damping, no Kp, only Kd with 0 ref vel
+        for (int i = 0; i < kNumMotors; ++i) {
+          motor_command_tmp.kp.at(i) = 0.f;
+          motor_command_tmp.kd.at(i) = IsWeakMotor(i) ? kd_low_ : kd_high_;
+          motor_command_tmp.q_ref.at(i) = ms_tmp_ptr->q.at(i);
+          motor_command_tmp.dq_ref.at(i) = 0.f;
+          motor_command_tmp.tau_ff.at(i) = 0.f;
+        }     
+      } else if (time_ > init_duration_) {
         const std::shared_ptr<const BaseState> bs_tmp_ptr =
             base_state_buffer_.GetData();
         const std::shared_ptr<const MotorState> ms_tmp_ptr =
