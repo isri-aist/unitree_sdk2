@@ -43,10 +43,10 @@ class Interface {
   ///
   /// \param[in] polDirName Name of directory that contains policy parameters
   /// \param[in] q_init Initial joint configuration of the robot
-  /// \param[in] scales Scaling parameters (actions, hip, observations)
+  /// \param[in] action_scale Scaling parameters for actions
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void initialize(std::string polDirName, VectorM q_init, Vector7 scales);
+  void initialize(std::string polDirName, VectorM q_init, float action_scale);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -162,7 +162,7 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
             << " | historyLength: " << historyLength_ << std::endl;
 }
 
-void Interface::initialize(std::string polDirName, VectorM q_init, Vector7 scales) {
+void Interface::initialize(std::string polDirName, VectorM q_init, float action_scale) {
   policy_.updateParamFromTxt(polDirName + "actor.txt");
   if (useAdaptation) {
     adaptationModel_.updateParamFromTxt(polDirName + "student.txt");
@@ -171,15 +171,15 @@ void Interface::initialize(std::string polDirName, VectorM q_init, Vector7 scale
   observationScaler_.updateRunningVarFromTxt(polDirName + "running_var.txt");
 
   // Action scale
-  _scaleAction = scales(0);
-  _hipReduction = scales(1);
+  _scaleAction = action_scale;
+  _hipReduction = 1.0;
 
   // Obs scales
-  _scaleQ = scales(2);
-  _scaleQd = scales(3);
-  _scaleLinVel = scales(4);
-  _scaleAngVel = scales(5);
-  _scaleHeights = scales(6);
+  _scaleQ = 1.0;
+  _scaleQd = 1.0;
+  _scaleLinVel = 1.0;
+  _scaleAngVel = 1.0;
+  _scaleHeights = 1.0;
   _scaleCommand << _scaleLinVel, _scaleLinVel, _scaleAngVel;
 
   // Velocity command

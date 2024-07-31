@@ -131,10 +131,9 @@ public:
     kp_ *= 0.0;
 
     // Create link with MLP
-    Vector7 scales {0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
     mlpInterface_.initialize(
         "/home/paleziart/git/policies/policy-2024-07-01/nn/", q_init_.head(10),
-        scales);
+        0.5);
 
     // Initialize tables for console display
     UpdateTables(true);
