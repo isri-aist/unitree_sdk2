@@ -24,6 +24,10 @@
 #include "fmtlog-inl.h"
 #include "fmtlog.h"
 
+#define STATUS_INIT 0
+#define STATUS_RUN 1
+#define STATUS_DAMPING 2
+
 static const std::string kTopicLowCommand = "rt/lowcmd";
 static const std::string kTopicLowState = "rt/lowstate";
 
@@ -213,52 +217,63 @@ public:
         pos(i) = ms_tmp_ptr->q.at(moti[i]);
         vel(i) = ms_tmp_ptr->dq.at(moti[i]);
       }
+
       // Check if joints are too close from position limits
       const bool lim_lower = ((pos - 0.8 * q_lim_lower).array() < 0.0).any();
       const bool lim_upper = ((pos - 0.8 * q_lim_upper).array() > 0.0).any();
       if (lim_lower || lim_upper) {emergency_damping_ = true;}
 
-      if (emergency_damping_) {
-        // Emergency damping, no Kp, only Kd with 0 ref vel
-        for (int i = 0; i < kNumMotors; ++i) {
-          motor_command_tmp.kp.at(moti[i]) = 0.f;
-          motor_command_tmp.kd.at(moti[i]) = kd_(i);
-          motor_command_tmp.q_ref.at(moti[i]) = ms_tmp_ptr->q.at(moti[i]);
-          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
-          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
-        }     
-      } else if (time_ > init_duration_) {
-  
-        Vector4 ori(bs_tmp_ptr->quat.data());
-        Vector3 gyro(bs_tmp_ptr->omega.data());
-        mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro, time_);
+      if (lim_lower || lim_upper) {status_ = STATUS_DAMPING;}
+      if ((status_ == STATUS_INIT) && (time_ > init_duration_)) {status_ = STATUS_RUN;}
 
-        std::cout
-            << std::setprecision(4)
-            << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
-            << std::endl;
+      switch (status_) {
+        case STATUS_RUN: {
+          Vector4 ori(bs_tmp_ptr->quat.data());
+          Vector3 gyro(bs_tmp_ptr->omega.data());
+          mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro, time_);
 
-        Vector10 network_cmd = q_init_.head(10);
-        float q_des = 0.f;
-        for (int i = 0; i < kNumMotors; ++i) {
-          q_des = i < 10 ? network_cmd(i) : q_init_(i);
-          motor_command_tmp.kp.at(moti[i]) = kp_(i);
-          motor_command_tmp.kd.at(moti[i]) = kd_(i);
-          motor_command_tmp.q_ref.at(moti[i]) = q_des;
-          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
-          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+          /*std::cout
+              << std::setprecision(4)
+              << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
+              << std::endl;*/
+
+          Vector10 network_cmd = q_init_.head(10);
+          std::cout << "Cmd: " << network_cmd.transpose() << std::endl;
+          network_cmd = q_init_.head(10);
+          float q_des = 0.f;
+          for (int i = 0; i < kNumMotors; ++i) {
+            q_des = i < 10 ? network_cmd(i) : q_init_(i);
+            motor_command_tmp.kp.at(moti[i]) = kp_(i);
+            motor_command_tmp.kd.at(moti[i]) = kd_(i);
+            motor_command_tmp.q_ref.at(moti[i]) = q_des;
+            motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+            motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+          }
+          break;
         }
-      } else {
-        // Slowly move to default configuration
-        float ratio = std::clamp(time_, 0.f, init_duration_) / init_duration_;
-        for (int i = 0; i < kNumMotors; ++i) {
-          motor_command_tmp.kp.at(moti[i]) = kp_(i);
-          motor_command_tmp.kd.at(moti[i]) = kd_(i);
-          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
-          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+        case STATUS_INIT: {
+          // Slowly move to default configuration
+          float ratio = std::clamp(time_, 0.f, init_duration_) / init_duration_;
+          for (int i = 0; i < kNumMotors; ++i) {
+            motor_command_tmp.kp.at(moti[i]) = kp_(i);
+            motor_command_tmp.kd.at(moti[i]) = kd_(i);
+            motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+            motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
 
-          float q_des = (q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio + ms_tmp_ptr->q.at(moti[i]);
-          motor_command_tmp.q_ref.at(moti[i]) = q_des;
+            float q_des = (q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio + ms_tmp_ptr->q.at(moti[i]);
+            motor_command_tmp.q_ref.at(moti[i]) = q_des;
+          }
+          break;
+        }
+        default: { // case STATUS_DAMPING:
+          // Emergency damping, no Kp, only Kd with 0 ref vel
+          for (int i = 0; i < kNumMotors; ++i) {
+            motor_command_tmp.kp.at(moti[i]) = 0.f;
+            motor_command_tmp.kd.at(moti[i]) = kd_(i);
+            motor_command_tmp.q_ref.at(moti[i]) = ms_tmp_ptr->q.at(moti[i]);
+            motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+            motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+          }
         }
       }
       // Write to command buffer
@@ -386,6 +401,23 @@ public:
       }
     }
 
+    switch (status_) {
+      case STATUS_INIT:
+        std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+        std::cout << "    ┃      Initialization      ┃" << std::endl;
+        std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+        break;
+      case STATUS_RUN:
+        std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+        std::cout << "    ┃    Running Controller    ┃" << std::endl;
+        std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+        break;
+      case STATUS_DAMPING:
+        std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+        std::cout << "    ┃    Emergency Damping!    ┃" << std::endl;
+        std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+        break;
+    }
     std::cout << "    ┏━━━━━━━━━━━━━━━━━━━┓" << std::endl;
     std::cout << "    ┃    Sensor Data    ┃" << std::endl;
     std::cout << "    ┗━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
@@ -463,11 +495,9 @@ private:
   Interface mlpInterface_;
 
   // control params
-  Vector20 kd_, kp_;
+  const float control_dt_ = 0.02f;
 
-  float control_dt_ = 0.02f;
-
-  bool emergency_damping_ = false;
+  int status_ = STATUS_INIT;
 
   // Default configuration
   const Vector20 q_init_ {
