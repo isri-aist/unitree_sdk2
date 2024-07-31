@@ -483,6 +483,16 @@ private:
     2.35, 2.87, 3.11, 4.45, 2.61, 2.87, 0.34, 1.3, 2.61,        // Torso and arms
     0.0 }; // Unused joint
 
+  // Proportional derivative gains
+  Vector20 kp_ {
+    200, 200, 200, 300, 40, 200, 200, 200, 300, 40, // Legs
+    200.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, // Torso and arms
+    0.0 }; // Unused joint
+  Vector20 kd_ {
+    5.0, 5.0, 5.0, 6.0, 2.0, 5.0, 5.0, 5.0, 6.0, 2.0, // Legs
+    5.0, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, // Torso and arms
+    0.0 }; // Unused joint
+
   float time_ = 0.f;
   float init_duration_ = 10.f;
 
