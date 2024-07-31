@@ -123,10 +123,12 @@ public:
         &HumanoidExample::UpdateTables, this, false);
 
     // Define Kp and Kd gains
-    kp_.fill(kp_low_);
-    kd_.fill(kd_low_);
-    kp_.head(11) << 200, 200, 200, 300, 40, 200, 200, 200, 300, 40, kp_high_;
-    kd_.head(11) << 5, 5, 5, 6, 2, 5, 5, 5, 6, 2, kd_high_;
+    kp_.fill(60.0);
+    kd_.fill(1.5);
+    kp_.head(11) << 200, 200, 200, 300, 40, 200, 200, 200, 300, 40, 200.0;
+    kd_.head(11) << 5, 5, 5, 6, 2, 5, 5, 5, 6, 2, 5.0;
+
+    kp_ *= 0.0;
 
     // Create link with MLP
     Vector7 scales {0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
@@ -201,8 +203,10 @@ public:
     MotorCommand motor_command_tmp;
     const std::shared_ptr<const MotorState> ms_tmp_ptr =
         motor_state_buffer_.GetData();
+    const std::shared_ptr<const BaseState> bs_tmp_ptr =
+        base_state_buffer_.GetData();
 
-    if (ms_tmp_ptr) {
+    if (ms_tmp_ptr && bs_tmp_ptr) {
       time_ += control_dt_;
 
       Vector20 pos, vel;
@@ -218,18 +222,14 @@ public:
       if (emergency_damping_) {
         // Emergency damping, no Kp, only Kd with 0 ref vel
         for (int i = 0; i < kNumMotors; ++i) {
-          motor_command_tmp.kp.at(i) = 0.f;
-          motor_command_tmp.kd.at(i) = IsWeakMotor(i) ? kd_low_ : kd_high_;
-          motor_command_tmp.q_ref.at(i) = ms_tmp_ptr->q.at(i);
-          motor_command_tmp.dq_ref.at(i) = 0.f;
-          motor_command_tmp.tau_ff.at(i) = 0.f;
+          motor_command_tmp.kp.at(moti[i]) = 0.f;
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = ms_tmp_ptr->q.at(moti[i]);
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }     
       } else if (time_ > init_duration_) {
-        const std::shared_ptr<const BaseState> bs_tmp_ptr =
-            base_state_buffer_.GetData();
-        const std::shared_ptr<const MotorState> ms_tmp_ptr =
-            motor_state_buffer_.GetData();
-
+  
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
         mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro, time_);
@@ -249,39 +249,17 @@ public:
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
-
       } else {
         // Slowly move to default configuration
-
         float ratio = std::clamp(time_, 0.f, init_duration_) / init_duration_;
         for (int i = 0; i < kNumMotors; ++i) {
-          motor_command_tmp.kp.at(i) = IsWeakMotor(i) ? kp_low_ : kp_high_;
-          motor_command_tmp.kd.at(i) = IsWeakMotor(i) ? kd_low_ : kd_high_;
-          motor_command_tmp.dq_ref.at(i) = 0.f;
-          motor_command_tmp.tau_ff.at(i) = 0.f;
+          motor_command_tmp.kp.at(moti[i]) = kp_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
 
-          float q_des = 0.f;
-          if (i == JointIndex::kLeftHipPitch ||
-              i == JointIndex::kRightHipPitch) {
-            q_des = hip_pitch_init_pos_;
-          }
-          if (i == JointIndex::kLeftKnee || i == JointIndex::kRightKnee) {
-            q_des = knee_init_pos_;
-          }
-          if (i == JointIndex::kLeftAnkle || i == JointIndex::kRightAnkle) {
-            q_des = ankle_init_pos_;
-          }
-          if (i == JointIndex::kLeftShoulderPitch ||
-              i == JointIndex::kRightShoulderPitch) {
-            q_des = shoulder_pitch_init_pos_;
-          }
-          if (i == JointIndex::kLeftElbow ||
-              i == JointIndex::kRightElbow) {
-            q_des = elbow_init_pos_;
-          }
-
-          q_des = (q_des - ms_tmp_ptr->q.at(i)) * ratio + ms_tmp_ptr->q.at(i);
-          motor_command_tmp.q_ref.at(i) = q_des;
+          float q_des = (q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio + ms_tmp_ptr->q.at(moti[i]);
+          motor_command_tmp.q_ref.at(moti[i]) = q_des;
         }
       }
       // Write to command buffer
@@ -486,19 +464,11 @@ private:
   Interface mlpInterface_;
 
   // control params
-  float kp_low_ = 60.f;
-  float kp_high_ = 200.f;
-  float kd_low_ = 1.5f;
-  float kd_high_ = 5.f;
   Vector20 kd_, kp_;
 
   float control_dt_ = 0.02f;
 
-  float hip_pitch_init_pos_ = -0.2f;
-  float knee_init_pos_ = 0.6f;
-  float ankle_init_pos_ = -0.4f;
-  float shoulder_pitch_init_pos_ = 0.4f;
-  float elbow_init_pos_ = -0.4f;
+  bool emergency_damping_ = false;
 
   // Default configuration
   const Vector20 q_init_ {
