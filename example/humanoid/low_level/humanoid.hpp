@@ -261,6 +261,10 @@ public:
               i == JointIndex::kRightShoulderPitch) {
             q_des = shoulder_pitch_init_pos_;
           }
+          if (i == JointIndex::kLeftElbow ||
+              i == JointIndex::kRightElbow) {
+            q_des = elbow_init_pos_;
+          }
 
           q_des = (q_des - ms_tmp_ptr->q.at(i)) * ratio + ms_tmp_ptr->q.at(i);
           motor_command_tmp.q_ref.at(i) = q_des;
@@ -480,6 +484,8 @@ private:
   float knee_init_pos_ = 1.f;
   float ankle_init_pos_ = -0.5f;
   float shoulder_pitch_init_pos_ = 0.4f;
+  float elbow_init_pos_ = -0.4f;
+
   // Default configuration
   const Vector20 q_init_ {
     0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6, -0.4, // Legs
