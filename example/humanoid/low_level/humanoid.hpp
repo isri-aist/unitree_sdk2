@@ -134,8 +134,7 @@ public:
     kd_.head(11) << 5, 5, 5, 6, 2, 5, 5, 5, 6, 2, kd_high_;
 
     // Create link with MLP
-    Vector7 scales;
-    scales << 0.5, 1.0, 1.0, 0.05, 2.0, 0.25, 5.0;
+    Vector7 scales {0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
     mlpInterface_.initialize(
         "/home/paleziart/git/policies/policy-2024-07-01/nn/", q_init_.head(10),
         scales);
