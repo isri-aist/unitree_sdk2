@@ -137,7 +137,7 @@ public:
     // Create link with MLP
     mlpInterface_.initialize(
         "/home/paleziart/git/policies/policy-2024-07-01/nn/", q_init_.head(10),
-        0.5);
+        0.25);
 
     // Initialize tables for console display
     UpdateTables(true);
