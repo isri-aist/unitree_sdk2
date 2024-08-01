@@ -201,7 +201,8 @@ public:
     RecordBaseState(low_state);
   }
 
-  // Take decisions for the next commands and send them to the motor command buffer
+  // Take decisions for the next commands and send them to the motor command
+  // buffer
   void Control() {
     MotorCommand motor_command_tmp;
     const std::shared_ptr<const MotorState> ms_tmp_ptr =
@@ -223,58 +224,64 @@ public:
       const bool lim_upper = ((pos - 0.8 * q_lim_upper).array() > 0.0).any();
       if (lim_lower || lim_upper) {emergency_damping_ = true;}
 
-      if (lim_lower || lim_upper) {status_ = STATUS_DAMPING;}
-      if ((status_ == STATUS_INIT) && (time_ > init_duration_)) {status_ = STATUS_RUN;}
+      if (lim_lower || lim_upper) {
+        status_ = STATUS_DAMPING;
+      }
+      if ((status_ == STATUS_INIT) && (time_ > init_duration_)) {
+        status_ = STATUS_RUN;
+      }
 
       switch (status_) {
-        case STATUS_RUN: {
-          Vector4 ori(bs_tmp_ptr->quat.data());
-          Vector3 gyro(bs_tmp_ptr->omega.data());
-          mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro, time_);
+      case STATUS_RUN: {
+        Vector4 ori(bs_tmp_ptr->quat.data());
+        Vector3 gyro(bs_tmp_ptr->omega.data());
+        mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro,
+                                         time_);
 
           /*std::cout
               << std::setprecision(4)
               << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
               << std::endl;*/
 
-          Vector10 network_cmd = q_init_.head(10);
-          std::cout << "Cmd: " << network_cmd.transpose() << std::endl;
-          network_cmd = q_init_.head(10);
-          float q_des = 0.f;
-          for (int i = 0; i < kNumMotors; ++i) {
-            q_des = i < 10 ? network_cmd(i) : q_init_(i);
-            motor_command_tmp.kp.at(moti[i]) = kp_(i);
-            motor_command_tmp.kd.at(moti[i]) = kd_(i);
-            motor_command_tmp.q_ref.at(moti[i]) = q_des;
-            motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
-            motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
-          }
-          break;
+        Vector10 network_cmd = q_init_.head(10);
+        std::cout << "Cmd: " << network_cmd.transpose() << std::endl;
+        network_cmd = q_init_.head(10);
+        float q_des = 0.f;
+        for (int i = 0; i < kNumMotors; ++i) {
+          q_des = i < 10 ? network_cmd(i) : q_init_(i);
+          motor_command_tmp.kp.at(moti[i]) = kp_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = q_des;
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
-        case STATUS_INIT: {
-          // Slowly move to default configuration
-          float ratio = std::clamp(time_, 0.f, init_duration_) / init_duration_;
-          for (int i = 0; i < kNumMotors; ++i) {
-            motor_command_tmp.kp.at(moti[i]) = kp_(i);
-            motor_command_tmp.kd.at(moti[i]) = kd_(i);
-            motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
-            motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+        break;
+      }
+      case STATUS_INIT: {
+        // Slowly move to default configuration
+        float ratio = std::clamp(time_, 0.f, init_duration_) / init_duration_;
+        for (int i = 0; i < kNumMotors; ++i) {
+          motor_command_tmp.kp.at(moti[i]) = kp_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
 
-            float q_des = (q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio + ms_tmp_ptr->q.at(moti[i]);
-            motor_command_tmp.q_ref.at(moti[i]) = q_des;
-          }
-          break;
+          float q_des = (q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio +
+                        ms_tmp_ptr->q.at(moti[i]);
+          motor_command_tmp.q_ref.at(moti[i]) = q_des;
         }
-        default: { // case STATUS_DAMPING:
-          // Emergency damping, no Kp, only Kd with 0 ref vel
-          for (int i = 0; i < kNumMotors; ++i) {
-            motor_command_tmp.kp.at(moti[i]) = 0.f;
-            motor_command_tmp.kd.at(moti[i]) = kd_(i);
-            motor_command_tmp.q_ref.at(moti[i]) = ms_tmp_ptr->q.at(moti[i]);
-            motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
-            motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
-          }
+        break;
+      }
+      default: { // case STATUS_DAMPING:
+        // Emergency damping, no Kp, only Kd with 0 ref vel
+        for (int i = 0; i < kNumMotors; ++i) {
+          motor_command_tmp.kp.at(moti[i]) = 0.f;
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = ms_tmp_ptr->q.at(moti[i]);
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
+      }
       }
       // Write to command buffer
       motor_command_buffer_.SetData(motor_command_tmp);
@@ -321,12 +328,12 @@ public:
     }
   }
 
-  void UpdateTables(bool init=false) {
+  void UpdateTables(bool init = false) {
 
     // Clear the console
     std::cout << u8"\033[2J";
 
-    if(init) {
+    if (init) {
       // Set tables border style
       table_IMU_.set_border_style(FT_NICE_STYLE);
       table_joints_.set_border_style(FT_NICE_STYLE);
@@ -334,9 +341,21 @@ public:
       // Initialize headers
       table_IMU_.set_cur_cell(0, 0);
       table_joints_.set_cur_cell(0, 0);
-      table_IMU_ << fort::header << "" << "X" << "Y" << "Z" << fort::endr;
-      table_joints_ << fort::header << "" << "L Yaw" << "L Roll" << "L Pitch" << "L Knee" << "L Ank";
-      table_joints_ << "R Yaw" << "R Roll" << "R Pitch" << "R Knee" << "R Ank" << fort::endr;
+      table_IMU_ << fort::header << ""
+                 << "X"
+                 << "Y"
+                 << "Z" << fort::endr;
+      table_joints_ << fort::header << ""
+                    << "L Yaw"
+                    << "L Roll"
+                    << "L Pitch"
+                    << "L Knee"
+                    << "L Ank";
+      table_joints_ << "R Yaw"
+                    << "R Roll"
+                    << "R Pitch"
+                    << "R Knee"
+                    << "R Ank" << fort::endr;
     }
 
     // Fill tables with data
@@ -353,15 +372,18 @@ public:
     if (bs_tmp_ptr) {
       table_IMU_ << "RPY";
       for (int i = 0; i < 3; ++i) {
-        table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->rpy.at(i);
+        table_IMU_ << std::fixed << std::setprecision(4)
+                   << bs_tmp_ptr->rpy.at(i);
       }
       table_IMU_ << fort::endr << fort::separator << "Gyro";
       for (int i = 0; i < 3; ++i) {
-        table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->omega.at(i);
+        table_IMU_ << std::fixed << std::setprecision(4)
+                   << bs_tmp_ptr->omega.at(i);
       }
       table_IMU_ << fort::endr << fort::separator << "Acc";
       for (int i = 0; i < 3; ++i) {
-        table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->acc.at(i);
+        table_IMU_ << std::fixed << std::setprecision(4)
+                   << bs_tmp_ptr->acc.at(i);
       }
     }
 
@@ -369,11 +391,13 @@ public:
     if (ms_tmp_ptr) {
       table_joints_ << "Pos";
       for (int i = 0; i < 10; ++i) {
-        table_joints_ << std::fixed << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]);
+        table_joints_ << std::fixed << std::setprecision(4)
+                      << ms_tmp_ptr->q.at(moti[i]);
       }
       table_joints_ << fort::endr << fort::separator << "Vel";
       for (int i = 0; i < 10; ++i) {
-        table_joints_ << std::fixed << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]);
+        table_joints_ << std::fixed << std::setprecision(4)
+                      << ms_tmp_ptr->dq.at(moti[i]);
       }
       table_joints_ << fort::endr;
     }
@@ -382,13 +406,14 @@ public:
       // Set text style
       table_IMU_.row(0).set_cell_content_text_style(fort::text_style::bold);
       table_IMU_.column(0).set_cell_content_text_style(fort::text_style::bold);
-      table_joints_.column(0).set_cell_content_text_style(fort::text_style::bold);
+      table_joints_.column(0).set_cell_content_text_style(
+          fort::text_style::bold);
 
       // Set alignment
       table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
       for (int i = 1; i < 4; ++i) {
-          table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
-          table_IMU_.column(i).set_cell_min_width(9);
+        table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
+        table_IMU_.column(i).set_cell_min_width(9);
       }
       table_IMU_[0][1].set_cell_text_align(fort::text_align::center);
       table_IMU_[0][2].set_cell_text_align(fort::text_align::center);
@@ -396,27 +421,27 @@ public:
 
       table_joints_.column(0).set_cell_text_align(fort::text_align::center);
       for (int i = 1; i < 11; ++i) {
-          table_joints_.column(i).set_cell_text_align(fort::text_align::right);
-          table_joints_.column(i).set_cell_min_width(9);
+        table_joints_.column(i).set_cell_text_align(fort::text_align::right);
+        table_joints_.column(i).set_cell_min_width(9);
       }
     }
 
     switch (status_) {
-      case STATUS_INIT:
-        std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-        std::cout << "    ┃      Initialization      ┃" << std::endl;
-        std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-        break;
-      case STATUS_RUN:
-        std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-        std::cout << "    ┃    Running Controller    ┃" << std::endl;
-        std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-        break;
-      case STATUS_DAMPING:
-        std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-        std::cout << "    ┃    Emergency Damping!    ┃" << std::endl;
-        std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-        break;
+    case STATUS_INIT:
+      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+      std::cout << "    ┃      Initialization      ┃" << std::endl;
+      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+      break;
+    case STATUS_RUN:
+      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+      std::cout << "    ┃    Running Controller    ┃" << std::endl;
+      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+      break;
+    case STATUS_DAMPING:
+      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+      std::cout << "    ┃    Emergency Damping!    ┃" << std::endl;
+      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+      break;
     }
     std::cout << "    ┏━━━━━━━━━━━━━━━━━━━┓" << std::endl;
     std::cout << "    ┃    Sensor Data    ┃" << std::endl;
@@ -500,28 +525,29 @@ private:
   int status_ = STATUS_INIT;
 
   // Default configuration
-  const Vector20 q_init_ {
-    0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6, -0.4, // Legs
-    0.0, 0.4, 0.0, 0.0, -0.4, 0.4, 0.0, 0.0, -0.4,        // Torso and arms
-    0.0 };                                                // Unused joint
-  const Vector20 q_lim_lower {
-    -0.43, -0.43, -3.14, -0.26, -0.87, -0.43, -0.43, -3.14, -0.26, -0.87, // Legs
-    -2.35, -2.87, -0.34, -1.3, -1.25, -2.87, -3.11, -4.45, -1.25,         // Torso and arms
-    0.0 }; // Unused joint
-  const Vector20 q_lim_upper {
-    0.43, 0.43, 2.53, 2.05, 0.52, 0.43, 0.43, 2.53, 2.05, 0.52, // Legs
-    2.35, 2.87, 3.11, 4.45, 2.61, 2.87, 0.34, 1.3, 2.61,        // Torso and arms
-    0.0 }; // Unused joint
+  const Vector20 q_init_{
+      0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6,  -0.4, // Legs
+      0.0, 0.4, 0.0,  0.0, -0.4, 0.4, 0.0, 0.0,  -0.4,       // Torso and arms
+      0.0};                                                  // Unused joint
+  const Vector20 q_lim_lower{-0.43, -0.43, -3.14, -0.26, -0.87,
+                             -0.43, -0.43, -3.14, -0.26, -0.87, // Legs
+                             -2.35, -2.87, -0.34, -1.3,  -1.25,
+                             -2.87, -3.11, -4.45, -1.25, // Torso and arms
+                             0.0};                       // Unused joint
+  const Vector20 q_lim_upper{
+      0.43, 0.43, 2.53, 2.05, 0.52, 0.43, 0.43, 2.53, 2.05, 0.52, // Legs
+      2.35, 2.87, 3.11, 4.45, 2.61, 2.87, 0.34, 1.3,  2.61, // Torso and arms
+      0.0};                                                 // Unused joint
 
   // Proportional derivative gains
-  Vector20 kp_ {
-    200, 200, 200, 300, 40, 200, 200, 200, 300, 40, // Legs
-    200.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, // Torso and arms
-    0.0 }; // Unused joint
-  Vector20 kd_ {
-    5.0, 5.0, 5.0, 6.0, 2.0, 5.0, 5.0, 5.0, 6.0, 2.0, // Legs
-    5.0, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, // Torso and arms
-    0.0 }; // Unused joint
+  Vector20 kp_{200.0, 200.0, 200.0, 300.0, 40.0,
+               200.0, 200.0, 200.0, 300.0, 40.0, // Legs
+               200.0, 60.0,  60.0,  60.0,  60.0,
+               60.0,  60.0,  60.0,  60.0, // Torso and arms
+               0.0};                      // Unused joint
+  Vector20 kd_{5.0, 5.0, 5.0, 6.0, 2.0, 5.0, 5.0, 5.0, 6.0, 2.0, // Legs
+               5.0, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, // Torso and arms
+               0.0};                                        // Unused joint
 
   float time_ = 0.f;
   float init_duration_ = 10.f;
@@ -536,5 +562,4 @@ private:
   // Table for console display
   fort::char_table table_IMU_;
   fort::char_table table_joints_;
-
 };
