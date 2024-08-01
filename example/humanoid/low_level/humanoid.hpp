@@ -328,6 +328,7 @@ public:
     }
   }
 
+  private:
   void UpdateTables(bool init = false) {
 
     // Clear the console
@@ -473,7 +474,6 @@ public:
     }
   }
 
-private:
   void RecordMotorState(const unitree_go::msg::dds_::LowState_ &msg) {
     MotorState ms_tmp;
     for (int i = 0; i < kNumMotors; ++i) {
