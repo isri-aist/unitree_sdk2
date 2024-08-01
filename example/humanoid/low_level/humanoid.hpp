@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdint.h>
 #include <string>
+#include <thread>
 
 #include "unitree/robot/channel/channel_publisher.hpp"
 #include "unitree/robot/channel/channel_subscriber.hpp"
@@ -18,81 +19,19 @@
 #include "data_buffer.hpp"
 #include "lib/fort.c"
 #include "lib/fort.hpp"
+#include "logger.hpp"
 #include "motors.hpp"
 
-#define FMT_HEADER_ONLY
-#include "fmtlog-inl.h"
-#include "fmtlog.h"
-
 #define STATUS_INIT 0
-#define STATUS_RUN 1
-#define STATUS_DAMPING 2
+#define STATUS_WAITING 1
+#define STATUS_RUN 2
+#define STATUS_DAMPING 3
 
 static const std::string kTopicLowCommand = "rt/lowcmd";
 static const std::string kTopicLowState = "rt/lowstate";
 
-template <typename T, size_t N>
-std::string arrayToStringView(const std::array<T, N> &arr) {
-  std::ostringstream oss;
-  for (size_t i = 0; i < N; ++i) {
-    oss << arr[i];
-    if (i < N - 1) {
-      oss << ",";
-    }
-  }
-  return oss.str();
-}
-
-template <> struct fmt::formatter<BaseState> : formatter<string_view> {
-  // parse is inherited from formatter<string_view>.
-  template <typename FormatContext>
-  auto format(BaseState bs, FormatContext &ctx) {
-
-    const std::string quat = "quat," + arrayToStringView(bs.quat);
-    const std::string rpy = "rpy," + arrayToStringView(bs.rpy);
-    const std::string omega = "omega," + arrayToStringView(bs.omega);
-    const std::string acc = "acc," + arrayToStringView(bs.acc);
-    const std::string all = quat + "\n" + rpy + "\n" + omega + "\n" + acc;
-
-    string_view name = all;
-
-    return formatter<string_view>::format(name, ctx);
-  }
-};
-
-template <> struct fmt::formatter<MotorState> : formatter<string_view> {
-  // parse is inherited from formatter<string_view>.
-  template <typename FormatContext>
-  auto format(MotorState ms, FormatContext &ctx) {
-
-    const std::string q = "q," + arrayToStringView(ms.q);
-    const std::string dq = "dq," + arrayToStringView(ms.dq);
-    const std::string all = q + "\n" + dq;
-
-    string_view name = all;
-
-    return formatter<string_view>::format(name, ctx);
-  }
-};
-
-template <> struct fmt::formatter<MotorCommand> : formatter<string_view> {
-  // parse is inherited from formatter<string_view>.
-  template <typename FormatContext>
-  auto format(MotorCommand mc, FormatContext &ctx) {
-
-    const std::string q_ref = "q_ref," + arrayToStringView(mc.q_ref);
-    const std::string dq_ref = "dq_ref," + arrayToStringView(mc.dq_ref);
-    const std::string kp = "kp," + arrayToStringView(mc.kp);
-    const std::string kd = "kd," + arrayToStringView(mc.kd);
-    const std::string tau_ff = "tau_ff," + arrayToStringView(mc.tau_ff);
-    const std::string all =
-        q_ref + "\n" + dq_ref + "\n" + kp + "\n" + kd + "\n" + tau_ff;
-
-    string_view name = all;
-
-    return formatter<string_view>::format(name, ctx);
-  }
-};
+class HumanoidExample;
+void waiting(HumanoidExample *HE);
 
 class HumanoidExample {
 public:
@@ -136,8 +75,8 @@ public:
 
     // Create link with MLP
     mlpInterface_.initialize(
-        "/home/paleziart/git/policies/policy-2024-07-01/nn/", q_init_.head(10),
-        0.25);
+        "/home/paleziart/git/policies/H1Terrain_08-01_11-22-18/nn/",
+        q_init_.head(10), 0.25);
 
     // Initialize tables for console display
     UpdateTables(true);
@@ -228,7 +167,9 @@ public:
         status_ = STATUS_DAMPING;
       }
       if ((status_ == STATUS_INIT) && (time_ > init_duration_)) {
-        status_ = STATUS_RUN;
+        status_ = STATUS_WAITING;
+        std::thread wait_thread(waiting, this);
+        wait_thread.detach();
       }
 
       switch (status_) {
@@ -243,15 +184,25 @@ public:
               << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
               << std::endl;*/
 
-        Vector10 network_cmd = q_init_.head(10);
-        std::cout << "Cmd: " << network_cmd.transpose() << std::endl;
-        network_cmd = q_init_.head(10);
+        Vector10 policy_cmd = mlpInterface_.forward();
+        Vector10 network_cmd = policy_cmd; // q_init_.head(10);
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
           q_des = i < 10 ? network_cmd(i) : q_init_(i);
           motor_command_tmp.kp.at(moti[i]) = kp_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_(i);
           motor_command_tmp.q_ref.at(moti[i]) = q_des;
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+        }
+        break;
+      }
+      case STATUS_WAITING: {
+        // Wait at default configuration
+        for (int i = 0; i < kNumMotors; ++i) {
+          motor_command_tmp.kp.at(moti[i]) = kp_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
@@ -328,7 +279,10 @@ public:
     }
   }
 
-  private:
+  // Launch controller once Enter is pressed
+  void endWaiting() { status_ = STATUS_RUN; }
+
+private:
   void UpdateTables(bool init = false) {
 
     // Clear the console
@@ -431,6 +385,11 @@ public:
     case STATUS_INIT:
       std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
       std::cout << "    ┃      Initialization      ┃" << std::endl;
+      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+      break;
+    case STATUS_WAITING:
+      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+      std::cout << "    ┃  Press Enter when ready  ┃" << std::endl;
       std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
       break;
     case STATUS_RUN:
@@ -563,3 +522,9 @@ public:
   fort::char_table table_IMU_;
   fort::char_table table_joints_;
 };
+
+// Wait for Enter key press
+void waiting(HumanoidExample *HE) {
+  std::cin.get();
+  HE->endWaiting();
+}
