@@ -264,12 +264,12 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   // Filling observation vector
   obs_ << base_ang_vel * _scaleAngVel,
           vel_command_.cwiseProduct(_scaleCommand),
+          Eigen::cos(phases),
+          Eigen::sin(phases),
           projected_gravity,
           pos * _scaleQ,
           vel * _scaleQd,
-          actions_ * _scaleAction,
-          Eigen::cos(phases),
-          Eigen::sin(phases);
+          actions_ * _scaleAction;
 
   // Update the history
   update_history();
