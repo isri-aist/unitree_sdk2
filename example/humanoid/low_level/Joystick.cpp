@@ -1,12 +1,8 @@
 #include "Joystick.hpp"
 
 Joystick::Joystick()
-    : A3_(Vector6::Zero()),
-      A2_(Vector6::Zero()),
-      p_ref_(Vector6::Zero()),
-      p_gp_(Vector6::Zero()),
-      v_ref_(Vector6::Zero()),
-      v_gp_(Vector6::Zero()),
+    : A3_(Vector6::Zero()), A2_(Vector6::Zero()), p_ref_(Vector6::Zero()),
+      p_gp_(Vector6::Zero()), v_ref_(Vector6::Zero()), v_gp_(Vector6::Zero()),
       v_ref_heavy_filter_(Vector6::Zero()) {}
 
 Joystick::~Joystick() {
@@ -63,10 +59,11 @@ void Joystick::update_v_ref(int k, bool gait_is_static) {
   }
 }
 
-int Joystick::read_event(int fd, struct js_event* event) {
+int Joystick::read_event(int fd, struct js_event *event) {
   ssize_t bytes;
   bytes = read(fd, event, sizeof(*event));
-  if (bytes == sizeof(*event)) return 0;
+  if (bytes == sizeof(*event))
+    return 0;
   /* Error, could not read full event. */
   return -1;
 }
@@ -78,30 +75,30 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
     if (event.type == JS_EVENT_BUTTON) {
       std::cout << "Event " << event.number << std::endl;
       switch (event.number) {
-        case 9:
-          gamepad.start = event.value;
-          break;
-        case 8:
-          gamepad.select = event.value;
-          break;
-        case 0:
-          gamepad.cross = event.value;
-          break;
-        case 1:
-          gamepad.circle = event.value;
-          break;
-        case 2:
-          gamepad.triangle = event.value;
-          break;
-        case 3:
-          gamepad.square = event.value;
-          break;
-        case 4:
-          gamepad.L1 = event.value;
-          break;
-        case 5:
-          gamepad.R1 = event.value;
-          break;
+      case 9:
+        gamepad.start = event.value;
+        break;
+      case 8:
+        gamepad.select = event.value;
+        break;
+      case 0:
+        gamepad.cross = event.value;
+        break;
+      case 1:
+        gamepad.circle = event.value;
+        break;
+      case 2:
+        gamepad.triangle = event.value;
+        break;
+      case 3:
+        gamepad.square = event.value;
+        break;
+      case 4:
+        gamepad.L1 = event.value;
+        break;
+      case 5:
+        gamepad.R1 = event.value;
+        break;
       }
     } else if (event.type == JS_EVENT_AXIS) {
       if (event.number == 0)
@@ -152,15 +149,18 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
   // Joystick code
   joystick_code_ = 0;
 
-  // Low pass filter to slow down the changes of velocity when moving the joysticks
+  // Low pass filter to slow down the changes of velocity when moving the
+  // joysticks
   v_ref_ = gp_alpha_vel * v_gp_ + (1 - gp_alpha_vel) * v_ref_;
 
-  // Heavily filtered joystick velocity to be used as a trigger for the switch trot/static
-  v_ref_heavy_filter_ = gp_alpha_vel_heavy_filter * v_gp_ + (1 - gp_alpha_vel_heavy_filter) * v_ref_heavy_filter_;
+  // Heavily filtered joystick velocity to be used as a trigger for the switch
+  // trot/static
+  v_ref_heavy_filter_ = gp_alpha_vel_heavy_filter * v_gp_ +
+                        (1 - gp_alpha_vel_heavy_filter) * v_ref_heavy_filter_;
 
-  // Low pass filter to slow down the changes of position when moving the joysticks
+  // Low pass filter to slow down the changes of position when moving the
+  // joysticks
   p_ref_ = gp_alpha_pos * p_gp_ + (1 - gp_alpha_pos) * p_ref_;
-
 }
 
 void Joystick::update_v_ref_predefined(int k) {
@@ -168,17 +168,22 @@ void Joystick::update_v_ref_predefined(int k) {
     v_swich = params_->v_switch;
     k_switch = (params_->t_switch / dt_wbc).cast<int>();
   }*/
-  handle_v_switch(k);  // Polynomial interpolation to generate the velocity profile
+  handle_v_switch(
+      k); // Polynomial interpolation to generate the velocity profile
 }
 
-void Joystick::update_for_analysis(Vector6 des_vel_analysis, int N_analysis, int N_steady) {
+void Joystick::update_for_analysis(Vector6 des_vel_analysis, int N_analysis,
+                                   int N_steady) {
   analysis = true;
-  double v_step = 0.05;                   // m/s
-  double v_max = des_vel_analysis(0, 0);  // m/s
+  double v_step = 0.05;                  // m/s
+  double v_max = des_vel_analysis(0, 0); // m/s
   int n_steps = static_cast<int>(std::round(v_max / v_step));
-  int N_start = static_cast<int>(std::round(1.0 / dt_wbc));  // Wait 1s before starting
-  int N_slope = static_cast<int>(std::round(1.0 / dt_wbc));  // Acceleration between steps last 1s
-  int N_still = static_cast<int>(std::round(3.0 / dt_wbc));  // Steady velocity phases last 5s
+  int N_start =
+      static_cast<int>(std::round(1.0 / dt_wbc)); // Wait 1s before starting
+  int N_slope = static_cast<int>(
+      std::round(1.0 / dt_wbc)); // Acceleration between steps last 1s
+  int N_still = static_cast<int>(
+      std::round(3.0 / dt_wbc)); // Steady velocity phases last 5s
 
   // Set dimensions of arrays
   k_switch = Eigen::Matrix<int, 1, Eigen::Dynamic>::Zero(1, 2 * (n_steps + 1));
