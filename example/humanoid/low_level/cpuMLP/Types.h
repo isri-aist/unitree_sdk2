@@ -27,6 +27,7 @@ using Vector24 = Eigen::Matrix<float, 24, 1>;
 using Vector123 = Eigen::Matrix<float, 123, 1>;
 using Vector132 = Eigen::Matrix<float, 132, 1>;
 using VectorN = Eigen::Matrix<float, Eigen::Dynamic, 1>;
+using VectorNi = Eigen::Matrix<int, Eigen::Dynamic, 1>;
 
 using Matrix2 = Eigen::Matrix<float, 2, 2>;
 using Matrix3 = Eigen::Matrix<float, 3, 3>;

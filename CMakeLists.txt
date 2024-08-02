@@ -64,6 +64,7 @@ target_include_directories(unitree_sdk2 INTERFACE
 target_link_libraries(unitree_sdk2 INTERFACE fmt)
 target_include_directories(unitree_sdk2 INTERFACE fmtlog)
 target_include_directories(unitree_sdk2 INTERFACE libfort)
+target_include_directories(unitree_sdk2 INTERFACE /home/paleziart/install/include)
 
 if (BUILD_EXAMPLES)
     add_subdirectory(example)
