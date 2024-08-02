@@ -13,6 +13,7 @@
 #include "Types.h"
 #include "cpuMLP.hpp"
 
+constexpr float pi_v = 3.14159265358979323846;
 using VectorM = Vector10;
 
 class Interface {
@@ -198,7 +199,7 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
   _qb.setZero();
   _qc.setZero();
   _qvec.setZero();
-  bound_pi_ << VectorM::Ones() * 3.1415f;
+  bound_pi_ << VectorM::Ones() * pi_v;
 
   // Initial times
   t_start_ = std::chrono::steady_clock::now();
@@ -258,8 +259,8 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   // Compute limb phase based on ellapsed time
   const float phase_freq = 1.25;
   Eigen::Array<float, 2, 1> phases;
-  phases << 0.0, 3.1415;
-  phases += 2 * 3.1415 * phase_freq * time;
+  phases << 0.0, pi_v;
+  phases += 2 * pi_v * phase_freq * time;
 
   // Filling observation vector
   obs_ << base_ang_vel * _scaleAngVel,
