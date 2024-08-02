@@ -1,9 +1,8 @@
 #include "Joystick.hpp"
 
 Joystick::Joystick()
-    : A3_(Vector6::Zero()), A2_(Vector6::Zero()), p_ref_(Vector6::Zero()),
-      p_gp_(Vector6::Zero()), v_ref_(Vector6::Zero()), v_gp_(Vector6::Zero()),
-      v_ref_heavy_filter_(Vector6::Zero()) {}
+    : A3_(Vector6::Zero()), A2_(Vector6::Zero()), v_ref_(Vector6::Zero()),
+      v_gp_(Vector6::Zero()) {}
 
 Joystick::~Joystick() {
   if (js != -1) {
@@ -11,17 +10,8 @@ Joystick::~Joystick() {
   }
 }
 
-void Joystick::initialize() {
-  dt_wbc = 0.001;
-  dt_mpc = 0.02;
-  k_mpc = static_cast<int>(std::round(dt_mpc / dt_wbc));
-  predefined = false;
-  gp_alpha_vel = 0.005;
-  gp_alpha_pos = 0.0;
-  p_ref_.setZero();
-  p_ref_(2, 0) = 0.9;
-
-  lock_time_L1_ = std::chrono::system_clock::now();
+void Joystick::initialize(double dt) {
+  dt_ = dt;
 
   // Gamepad initialisation
   if (!predefined) {
@@ -47,7 +37,7 @@ void Joystick::handle_v_switch(int k) {
   }
 }
 
-void Joystick::update_v_ref(int k, bool gait_is_static) {
+void Joystick::update_v_ref(int k) {
   if (predefined) {
     if (analysis) {
       handle_v_switch(k);
@@ -55,7 +45,7 @@ void Joystick::update_v_ref(int k, bool gait_is_static) {
       update_v_ref_predefined(k);
     }
   } else {
-    update_v_ref_gamepad(k, gait_is_static);
+    update_v_ref_gamepad(k);
   }
 }
 
@@ -68,12 +58,10 @@ int Joystick::read_event(int fd, struct js_event *event) {
   return -1;
 }
 
-void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
+void Joystick::update_v_ref_gamepad(int k) {
   // Read information from gamepad client
   if (read_event(js, &event) == 0) {
-    std::cout << "Event! " << std::endl;
     if (event.type == JS_EVENT_BUTTON) {
-      std::cout << "Event " << event.number << std::endl;
       switch (event.number) {
       case 9:
         gamepad.start = event.value;
@@ -102,26 +90,21 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
       }
     } else if (event.type == JS_EVENT_AXIS) {
       if (event.number == 0)
-        gamepad.v_x = -event.value / 32767.0;
-      else if (event.number == 1)
         gamepad.v_y = -event.value / 32767.0;
-      else if (event.number == 4)
-        gamepad.v_z = -event.value / 32767.0;
+      else if (event.number == 1)
+        gamepad.v_x = -event.value / 32767.0;
       else if (event.number == 3)
+        gamepad.v_z = -event.value / 32767.0;
+      else if (event.number == 2)
         gamepad.w_yaw = -event.value / 32767.0;
     }
-  }
-
-  // Remember when L1 was pressed for the last time
-  if (gamepad.L1 == 1) {
-    lock_time_L1_ = std::chrono::system_clock::now();
   }
 
   // Retrieve data from gamepad for velocity
   double vX = gamepad.v_x * vXScale;
   double vY = gamepad.v_y * vYScale;
   double vYaw = gamepad.w_yaw * vYawScale;
-  v_gp_ << vY, vX, 0.0, 0.0, 0.0, vYaw;
+  v_gp_ << vX, vY, 0.0, 0.0, 0.0, vYaw;
 
   // Dead zone to avoid gamepad noise
   double dead_zone = 0.004;
@@ -130,13 +113,6 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
       v_gp_(i, 0) = 0.0;
     }
   }
-
-  // Retrieve data from gamepad for velocity
-  double pRoll = gamepad.v_x * pRollScale;
-  double pPitch = gamepad.v_y * pPitchScale;
-  double pHeight = gamepad.v_z * pHeightScale + 0.9;
-  double pYaw = gamepad.w_yaw * pYawScale;
-  p_gp_ << 0.0, 0.0, pHeight, pRoll, pPitch, pYaw;
 
   // Switch to safety controller if the select key is pressed
   if (gamepad.select == 1) {
@@ -152,24 +128,16 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
   // Low pass filter to slow down the changes of velocity when moving the
   // joysticks
   v_ref_ = gp_alpha_vel * v_gp_ + (1 - gp_alpha_vel) * v_ref_;
-
-  // Heavily filtered joystick velocity to be used as a trigger for the switch
-  // trot/static
-  v_ref_heavy_filter_ = gp_alpha_vel_heavy_filter * v_gp_ +
-                        (1 - gp_alpha_vel_heavy_filter) * v_ref_heavy_filter_;
-
-  // Low pass filter to slow down the changes of position when moving the
-  // joysticks
-  p_ref_ = gp_alpha_pos * p_gp_ + (1 - gp_alpha_pos) * p_ref_;
 }
 
 void Joystick::update_v_ref_predefined(int k) {
   /*if (k == 0) {
     v_swich = params_->v_switch;
-    k_switch = (params_->t_switch / dt_wbc).cast<int>();
+    k_switch = (params_->t_switch / dt_).cast<int>();
   }*/
-  handle_v_switch(
-      k); // Polynomial interpolation to generate the velocity profile
+
+  // Polynomial interpolation to generate the velocity profile
+  handle_v_switch(k);
 }
 
 void Joystick::update_for_analysis(Vector6 des_vel_analysis, int N_analysis,
@@ -179,11 +147,11 @@ void Joystick::update_for_analysis(Vector6 des_vel_analysis, int N_analysis,
   double v_max = des_vel_analysis(0, 0); // m/s
   int n_steps = static_cast<int>(std::round(v_max / v_step));
   int N_start =
-      static_cast<int>(std::round(1.0 / dt_wbc)); // Wait 1s before starting
+      static_cast<int>(std::round(1.0 / dt_)); // Wait 1s before starting
   int N_slope = static_cast<int>(
-      std::round(1.0 / dt_wbc)); // Acceleration between steps last 1s
-  int N_still = static_cast<int>(
-      std::round(3.0 / dt_wbc)); // Steady velocity phases last 5s
+      std::round(1.0 / dt_)); // Acceleration between steps last 1s
+  int N_still =
+      static_cast<int>(std::round(3.0 / dt_)); // Steady velocity phases last 5s
 
   // Set dimensions of arrays
   k_switch = Eigen::Matrix<int, 1, Eigen::Dynamic>::Zero(1, 2 * (n_steps + 1));

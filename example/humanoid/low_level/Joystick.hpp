@@ -44,8 +44,10 @@ class Joystick {
   ///
   /// \brief Initialize with given data
   ///
+  /// \param[in] dt Time step of the calls to the joystick
+  ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void initialize();
+  void initialize(double dt);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -69,10 +71,9 @@ class Joystick {
   /// reading the status of the gamepad
   ///
   /// \param[in] k Numero of the current loop
-  /// \param[in] gait_is_static If the Gait is in or is switching to a static gait
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void update_v_ref(int k, bool gait_is_static);
+  void update_v_ref(int k = 0);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -89,10 +90,9 @@ class Joystick {
   /// \brief Update the status of the joystick by reading the status of the gamepad
   ///
   /// \param[in] k Numero of the current loop
-  /// \param[in] gait_is_static If the Gait is in or is switching to a static gait
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void update_v_ref_gamepad(int k, bool gait_is_static);
+  void update_v_ref_gamepad(int k);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -123,7 +123,6 @@ class Joystick {
   ////////////////////////////////////////////////////////////////////////////////////////////////
   Vector6 getLastReachedVelocity(int k);
 
-  Vector6 getPRef() { return p_ref_; }
   Vector6 getVRef() { return v_ref_; }
   int getProfileDuration() { return k_switch(0, k_switch.cols() - 1); }
   int getJoystickCode() { return joystick_code_; }
@@ -140,11 +139,8 @@ class Joystick {
 
   Vector6 A3_;     // Third order coefficient of the polynomial that generates the velocity profile
   Vector6 A2_;     // Second order coefficient of the polynomial that generates the velocity profile
-  Vector6 p_ref_;  // Reference position of the gamepad after low pass filter
-  Vector6 p_gp_;   // Raw position reference of the gamepad
   Vector6 v_ref_;  // Reference velocity resulting of the polynomial interpolation or after low pass filter
   Vector6 v_gp_;   // Raw velocity reference of the gamepad
-  Vector6 v_ref_heavy_filter_;  // Reference velocity after heavy low pass filter
 
   int joystick_code_ = 0;   // Code to trigger gait changes
   bool stop_ = false;       // Flag to stop the controller
@@ -152,35 +148,18 @@ class Joystick {
   bool predefined = false;  // Flag to perform polynomial interpolation or read the gamepad
   bool analysis = false;    // Flag to perform a performance analysis up to a given velocity
 
-  double dt_mpc = 0.0;  // Time step of the MPC
-  double dt_wbc = 0.0;  // Time step of the WBC
-  int k_mpc = 0;        // Number of WBC time step for one MPC time step
+  double dt_ = 0.0;  // Time step
 
   VectorNi k_switch;  // Key frames for the polynomial velocity interpolation
   Matrix6N v_switch;  // Target velocity for the key frames
 
   // How much the gamepad velocity and position is filtered to avoid sharp changes
-  double gp_alpha_vel = 0.0;                 // Low pass filter coefficient for v_ref_ (if gamepad-controlled)
-  double gp_alpha_pos = 0.0;                 // Low pass filter coefficient for p_ref_
-  double gp_alpha_vel_heavy_filter = 0.002;  // Low pass filter coefficient for v_ref_heavy_filter_
+  const double gp_alpha_vel = 0.005;  // Low pass filter coefficient for v_ref_ (if gamepad-controlled)
 
   // Maximum velocity values
-  double vXScale = 0.25;    // Lateral
-  double vYScale = 0.5;    // Forward
-  double vYawScale = 1.0;  // Rotation
-
-  // Maximum position values
-  double pRollScale = -0.32;  // Lateral
-  double pPitchScale = 0.32;  // Forward
-  double pHeightScale = 0.0;  // Raise/Lower the base
-  double pYawScale = -0.35;   // Rotation Yaw
-
-  // Variable to handle the automatic static/trot switching
-  bool switch_static = false;   // Flag to switch to a static gait
-  bool lock_gp = true;          // Flag to lock the output velocity when we are switching back to trot gait
-  double lock_duration_ = 1.0;  // Duration of the lock in seconds
-  std::chrono::time_point<std::chrono::system_clock> lock_time_static_;  // Timestamp of the start of the lock
-  std::chrono::time_point<std::chrono::system_clock> lock_time_L1_;      // Timestamp of the latest L1 pressing
+  const double vXScale = 0.15;   // Lateral
+  const double vYScale = 0.15;   // Forward
+  const double vYawScale = 0.3;  // Rotation
 
   // Gamepad client variables
   struct gamepad_struct gamepad;  // Structure that stores gamepad status
