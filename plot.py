@@ -33,6 +33,7 @@ joint_indices = [7, 3, 4, 5, 10, 8, 0, 1, 2, 11, 6, 16, 17, 18, 19, 12, 13, 14, 
 leg_indices = joint_indices[:10]
 arm_indices = joint_indices[11:19]
 
+
 def plot_leg_arm(ys, indices, lgd1, lgd2, lbls, title, yunit):
     mod = len(indices)
     mod2 = int(mod / 2)
@@ -45,7 +46,7 @@ def plot_leg_arm(ys, indices, lgd1, lgd2, lbls, title, yunit):
     for i in range(mod):
         for j, y in enumerate(ys):
             axs[int(i / mod2), i % mod2].plot(
-                data["time"][:ys[j].shape[0]],
+                data["time"][: ys[j].shape[0]],
                 ys[j][:, indices[i]],
                 linestyle="-",
                 linewidth=3,
@@ -71,24 +72,104 @@ lgd2 = ["Left", "Right"]
 
 # Display leg joint positions
 plot_leg_arm(
-    [data["q"], data["q_ref"]],
+    [data["q_ref"], data["q"]],
     leg_indices,
     lgd1_leg,
     lgd2,
-    ["Measured", "Desired"],
+    ["Desired", "Measured"],
     "Leg joint positions",
     " [rad]",
 )
 
 plot_leg_arm(
-    [data["q"], data["q_ref"]],
+    [data["q_ref"], data["q"]],
     arm_indices,
     lgd1_arm,
     lgd2,
-    ["Measured", "Desired"],
+    ["Desired", "Measured"],
     "Arm joint positions",
     " [rad]",
 )
+
+# Display leg joint velocities
+plot_leg_arm(
+    [data["dq_ref"], data["dq"]],
+    leg_indices,
+    lgd1_leg,
+    lgd2,
+    ["Desired", "Measured"],
+    "Leg joint velocities",
+    " [rad/s]",
+)
+
+plot_leg_arm(
+    [data["dq_ref"], data["dq"]],
+    arm_indices,
+    lgd1_arm,
+    lgd2,
+    ["Desired", "Measured"],
+    "Arm joint velocities",
+    " [rad/s]",
+)
+
+fig, axs = plt.subplots(
+    1,
+    3,
+    figsize=(15, 12),
+    sharex=True,
+)
+for i in range(3):
+    axs[i].plot(
+        data["time"][: data["omega"][:, i].shape[0]],
+        data["omega"][:, i],
+        linestyle="-",
+        linewidth=3,
+        label=["Measured"],
+    )
+
+plt.legend()
+plt.grid(True)
+fig.canvas.manager.set_window_title("Angular velocity [rad/s]")
+
+
+def transformBodyQuat(bodyQuat):
+
+    # Body QUAT and gravity vector of 0 , 0, -1
+    gravityVec = np.array([[0.0, 0.0, -1.0]]).transpose()
+
+    """from IPython import embed
+
+    embed()"""
+
+    q_w = bodyQuat[:, 0:1]
+    qvec = bodyQuat[:, 1:]
+    qa = gravityVec.transpose() * (2.0 * q_w * q_w - 1.0)
+    qb = np.cross(qvec, gravityVec.transpose()) * q_w * 2.0
+    qc = qvec * (qvec @ gravityVec) * 2.0
+    bodyOri = qa - qb + qc
+    return bodyOri
+
+
+projected_grav = transformBodyQuat(data["quat"])
+
+fig, axs = plt.subplots(
+    1,
+    3,
+    figsize=(15, 12),
+    sharex=True,
+)
+for i in range(3):
+    axs[i].plot(
+        data["time"][: projected_grav[:, i].shape[0]],
+        projected_grav[:, i],
+        linestyle="-",
+        linewidth=3,
+        label=["Measured"],
+    )
+
+plt.legend()
+plt.grid(True)
+fig.canvas.manager.set_window_title("Projected gravity")
 
 if SAVEFIGS:
     plt.savefig(self.checkpoint_name + "_joint_pos.png")
