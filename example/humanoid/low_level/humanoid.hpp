@@ -233,7 +233,7 @@ public:
           motor_command_tmp.kd.at(moti[i]) = kd_(i);
           motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
-          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = tau_ff_(i) * 0.0;
         }
         break;
       }
@@ -551,6 +551,13 @@ private:
   Vector20 kd_{5.0, 5.0, 5.0, 6.0, 2.0, 5.0, 5.0, 5.0, 6.0, 2.0, // Legs
                5.0, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, // Torso and arms
                0.0};                                        // Unused joint
+
+  Vector20 tau_ff_{0.0, -9.0, -8.5, -26.0, 9.0,
+                   0.0, -9.0, -8.5, -26.0, 9.0,
+                   0.0,
+                   0.0,  0.0,  0.0,   0.0,
+                   0.0,  0.0,  0.0,   0.0,
+                   0.0};  
 
   const Matrix4 quatPermut {{0, 1, 0, 0}, 
                             {0, 0, 1, 0},
