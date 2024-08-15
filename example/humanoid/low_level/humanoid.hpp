@@ -217,8 +217,8 @@ public:
       case STATUS_WAITING_AIR: {
         // Wait at default configuration
         for (int i = 0; i < kNumMotors; ++i) {
-          motor_command_tmp.kp.at(moti[i]) = kp_(i);
-          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
           motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
