@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string>
 #include <thread>
+#include <chrono>
 
 #include "unitree/robot/channel/channel_publisher.hpp"
 #include "unitree/robot/channel/channel_subscriber.hpp"
@@ -23,9 +24,10 @@
 #include "motors.hpp"
 
 #define STATUS_INIT 0
-#define STATUS_WAITING 1
-#define STATUS_RUN 2
-#define STATUS_DAMPING 3
+#define STATUS_WAITING_AIR 1
+#define STATUS_WAITING_GRD 2
+#define STATUS_RUN 3
+#define STATUS_DAMPING 4
 
 static const std::string kTopicLowCommand = "rt/lowcmd";
 static const std::string kTopicLowState = "rt/lowstate";
@@ -198,7 +200,30 @@ public:
         }
         break;
       }
-      case STATUS_WAITING: {
+      case STATUS_WAITING_AIR: {
+
+        
+        Vector4 ori(bs_tmp_ptr->quat.data());
+        transformBodyQuat(quatPermut * ori);
+        
+        // Wait at default configuration
+        for (int i = 0; i < kNumMotors; ++i) {
+
+          float q_des = q_init_(i);
+          float dq_des = 0.0;
+          float tgt = 0.15 * std::sin(2 * 3.14159265 * time_ / 3.0);
+          float dtgt = (2 * 3.14159265 / 3.0) * 0.15 * std::cos(2 * 3.14159265 * time_ / 3.0);
+          if (i < 2) {q_des += tgt; dq_des = dtgt;}
+
+          motor_command_tmp.kp.at(moti[i]) = kp_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = q_des;
+          motor_command_tmp.dq_ref.at(moti[i]) = dq_des;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+        }
+        break;
+      }
+      case STATUS_WAITING_GRD: {
         // Wait at default configuration
         for (int i = 0; i < kNumMotors; ++i) {
           motor_command_tmp.kp.at(moti[i]) = kp_(i);
@@ -281,7 +306,16 @@ public:
   }
 
   // Launch controller once Enter is pressed
-  void endWaiting() { status_ = STATUS_RUN; }
+  void endWaiting() { 
+    if (status_ == STATUS_WAITING_AIR) {
+      status_ = STATUS_WAITING_GRD;
+      std::thread wait_thread(waiting, this);
+      wait_thread.detach();
+    } else if (status_ == STATUS_WAITING_GRD) { 
+      time_run_ = -control_dt_;
+      // status_ = STATUS_RUN;
+    }
+  }
 
 private:
   void UpdateTables(bool init = false) {
@@ -388,9 +422,14 @@ private:
       std::cout << "    ┃      Initialization      ┃" << std::endl;
       std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
       break;
-    case STATUS_WAITING:
+    case STATUS_WAITING_AIR:
       std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-      std::cout << "    ┃  Press Enter when ready  ┃" << std::endl;
+      std::cout << "    ┃    Waiting in the air    ┃" << std::endl;
+      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+      break;
+    case STATUS_WAITING_GRD:
+      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+      std::cout << "    ┃   Waiting on the ground  ┃" << std::endl;
       std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
       break;
     case STATUS_RUN:
@@ -409,6 +448,7 @@ private:
     std::cout << "    ┗━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
     std::cout << table_IMU_.to_string() << std::endl;
     std::cout << table_joints_.to_string() << std::endl;
+    std::cout << "Time: " << time_ << std::endl;
   }
 
   void LogAll() {
