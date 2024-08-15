@@ -174,10 +174,11 @@ public:
 
       switch (status_) {
       case STATUS_RUN: {
+        time_run_ += control_dt_;
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
-        mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro,
-                                         time_);
+        mlpInterface_.update_observation(pos.head(10), vel.head(10), quatPermut * ori, gyro,
+                                         time_run_);
 
           /*std::cout
               << std::setprecision(4)
@@ -508,8 +509,14 @@ private:
                5.0, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, // Torso and arms
                0.0};                                        // Unused joint
 
+  const Matrix4 quatPermut {{0, 1, 0, 0}, 
+                            {0, 0, 1, 0},
+                            {0, 0, 0, 1},
+                            {1, 0, 0, 0}};  // Reorder quat vector
+
   float time_ = 0.f;
-  float init_duration_ = 10.f;
+  float time_run_ = 0.f;
+  const float init_duration_ = 6.f;
 
   float report_dt_ = 0.1f;
 
