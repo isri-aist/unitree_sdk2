@@ -7,5 +7,5 @@ target_link_libraries(g1_loco_client unitree_sdk2)
 add_executable(h1_low_level_example low_level/humanoid.cpp)
 target_link_libraries(h1_low_level_example unitree_sdk2)
 
-add_executable(h1_test_example low_level/test_humanoid.cpp low_level/Joystick.cpp)
+add_executable(h1_test_example low_level/debug_humanoid.cpp low_level/Joystick.cpp)
 target_link_libraries(h1_test_example unitree_sdk2)
