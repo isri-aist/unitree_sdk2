@@ -216,24 +216,12 @@ public:
         break;
       }
       case STATUS_WAITING_AIR: {
-
-        
-        Vector4 ori(bs_tmp_ptr->quat.data());
-        transformBodyQuat(quatPermut * ori);
-        
         // Wait at default configuration
         for (int i = 0; i < kNumMotors; ++i) {
-
-          float q_des = q_init_(i);
-          float dq_des = 0.0;
-          float tgt = 0.15 * std::sin(2 * 3.14159265 * time_ / 3.0);
-          float dtgt = (2 * 3.14159265 / 3.0) * 0.15 * std::cos(2 * 3.14159265 * time_ / 3.0);
-          if (i < 2) {q_des += tgt; dq_des = dtgt;}
-
           motor_command_tmp.kp.at(moti[i]) = kp_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_(i);
-          motor_command_tmp.q_ref.at(moti[i]) = q_des;
-          motor_command_tmp.dq_ref.at(moti[i]) = dq_des;
+          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
         break;
