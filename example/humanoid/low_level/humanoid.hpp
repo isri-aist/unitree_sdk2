@@ -77,8 +77,8 @@ public:
 
     // Create link with MLP
     mlpInterface_.initialize(
-        "/home/paleziart/git/policies/H1Terrain_08-01_11-22-18/nn/",
-        q_init_.head(10), 0.25);
+        "/home/paleziart/git/policies/H1Terrain_08-15_14-39-47/nn/",
+        q_init_.head(10), 0.5);
 
     // Initialize tables for console display
     UpdateTables(true);
@@ -176,15 +176,14 @@ public:
       }
 
       // Check if joints are too close from position limits
-      const bool lim_lower = ((pos - 0.8 * q_lim_lower).array() < 0.0).any();
-      const bool lim_upper = ((pos - 0.8 * q_lim_upper).array() > 0.0).any();
-      if (lim_lower || lim_upper) {emergency_damping_ = true;}
+      const bool lim_lower = ((pos - 0.85 * q_lim_lower).array() < 0.0).any();
+      const bool lim_upper = ((pos - 0.85 * q_lim_upper).array() > 0.0).any();
 
       if (lim_lower || lim_upper) {
         status_ = STATUS_DAMPING;
       }
       if ((status_ == STATUS_INIT) && (time_ > init_duration_)) {
-        status_ = STATUS_WAITING;
+        status_ = STATUS_WAITING_AIR;
         std::thread wait_thread(waiting, this);
         wait_thread.detach();
       }
@@ -316,7 +315,7 @@ public:
       wait_thread.detach();
     } else if (status_ == STATUS_WAITING_GRD) { 
       time_run_ = -control_dt_;
-      // status_ = STATUS_RUN;
+      status_ = STATUS_RUN;
     }
   }
 
