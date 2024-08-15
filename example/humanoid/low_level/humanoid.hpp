@@ -142,6 +142,21 @@ public:
     RecordBaseState(low_state);
   }
 
+  void transformBodyQuat(Vector4 _bodyQuat) {
+          Vector3 _gravityVec, _qa, _qb, _qc, _qvec, _bodyOri;
+          float q_w = 0.0;
+          _gravityVec << 0.0, 0.0, -1.;
+
+          // Body QUAT and gravity vector of 0 , 0, -1
+          q_w = _bodyQuat[3];
+          _qvec = _bodyQuat.head(3);
+          _qa = _gravityVec * (2. * q_w * q_w - 1.);
+          _qb = _qvec.cross(_gravityVec) * q_w * 2.0;
+          _qc = _qvec * (_qvec.transpose() * _gravityVec) * 2.0;
+          _bodyOri = _qa - _qb + _qc;
+          std::cout << _bodyOri.transpose() << std::endl;
+        }
+
   // Take decisions for the next commands and send them to the motor command
   // buffer
   void Control() {
