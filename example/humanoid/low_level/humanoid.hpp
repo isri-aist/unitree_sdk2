@@ -143,19 +143,18 @@ public:
   }
 
   void transformBodyQuat(Vector4 _bodyQuat) {
-          Vector3 _gravityVec, _qa, _qb, _qc, _qvec, _bodyOri;
-          float q_w = 0.0;
-          _gravityVec << 0.0, 0.0, -1.;
+    Vector3 _gravityVec, _qa, _qb, _qc, _qvec, _bodyOri;
+    float q_w = 0.0;
+    _gravityVec << 0.0, 0.0, -1.;
 
-          // Body QUAT and gravity vector of 0 , 0, -1
-          q_w = _bodyQuat[3];
-          _qvec = _bodyQuat.head(3);
-          _qa = _gravityVec * (2. * q_w * q_w - 1.);
-          _qb = _qvec.cross(_gravityVec) * q_w * 2.0;
-          _qc = _qvec * (_qvec.transpose() * _gravityVec) * 2.0;
-          _bodyOri = _qa - _qb + _qc;
-          std::cout << _bodyOri.transpose() << std::endl;
-        }
+    // Body QUAT and gravity vector of 0 , 0, -1
+    q_w = _bodyQuat[3];
+    _qvec = _bodyQuat.head(3);
+    _qa = _gravityVec * (2. * q_w * q_w - 1.);
+    _qb = _qvec.cross(_gravityVec) * q_w * 2.0;
+    _qc = _qvec * (_qvec.transpose() * _gravityVec) * 2.0;
+    _bodyOri = _qa - _qb + _qc;
+  }
 
   // Take decisions for the next commands and send them to the motor command
   // buffer
@@ -228,8 +227,8 @@ public:
       case STATUS_WAITING_GRD: {
         // Wait at default configuration
         for (int i = 0; i < kNumMotors; ++i) {
-          motor_command_tmp.kp.at(moti[i]) = kp_(i);
-          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
           motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = tau_ff_(i) * 0.0;
@@ -240,8 +239,8 @@ public:
         // Slowly move to default configuration
         float ratio = std::clamp(time_, 0.f, init_duration_) / init_duration_;
         for (int i = 0; i < kNumMotors; ++i) {
-          motor_command_tmp.kp.at(moti[i]) = kp_(i);
-          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
 
@@ -308,12 +307,12 @@ public:
   }
 
   // Launch controller once Enter is pressed
-  void endWaiting() { 
+  void endWaiting() {
     if (status_ == STATUS_WAITING_AIR) {
       status_ = STATUS_WAITING_GRD;
       std::thread wait_thread(waiting, this);
       wait_thread.detach();
-    } else if (status_ == STATUS_WAITING_GRD) { 
+    } else if (status_ == STATUS_WAITING_GRD) {
       time_run_ = -control_dt_;
       status_ = STATUS_RUN;
     }
