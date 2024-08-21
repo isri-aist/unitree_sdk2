@@ -14,6 +14,7 @@
 #include <unitree/idl/go2/LowCmd_.hpp>
 #include <unitree/idl/go2/LowState_.hpp>
 
+#include "Joystick.hpp"
 #include "base_state.h"
 #include "cpuMLP/Interface.hpp"
 #include "cpuMLP/Types.h"
@@ -22,6 +23,8 @@
 #include "lib/fort.hpp"
 #include "logger.hpp"
 #include "motors.hpp"
+
+#define USE_JOYSTICK false
 
 #define STATUS_INIT 0
 #define STATUS_WAITING_AIR 1
@@ -74,6 +77,10 @@ public:
     kd_.head(11) << 5, 5, 5, 6, 2, 5, 5, 5, 6, 2, 5.0;
 
     kp_ *= 0.0;
+    // Create the link with the joystick
+    if (USE_JOYSTICK) {
+      joy_.initialize(control_dt_);
+    }
 
     // Create link with MLP
     mlpInterface_.initialize(
@@ -190,6 +197,10 @@ public:
       switch (status_) {
       case STATUS_RUN: {
         time_run_ += control_dt_;
+
+        // Refresh joystick
+        joy_.update_v_ref();
+
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
         mlpInterface_.update_observation(pos.head(10), vel.head(10), quatPermut * ori, gyro,
@@ -591,6 +602,9 @@ private:
   const float init_duration_ = 6.f;
 
   float report_dt_ = 0.1f;
+
+  // Joystick interface
+  Joystick joy_;
 
   // multithreading
   unitree::common::ThreadPtr command_writer_ptr_;
