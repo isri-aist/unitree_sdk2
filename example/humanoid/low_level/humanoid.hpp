@@ -265,6 +265,13 @@ public:
       motor_command_buffer_.SetData(motor_command_tmp);
 
       // Log sensors and commands
+      for (int i = 0; i < kNumMotors; ++i) {
+        tau_des_(i) = motor_command_tmp.kp.at(moti[i]) *
+                          (motor_command_tmp.q_ref.at(moti[i]) - pos(i)) +
+                      motor_command_tmp.kd.at(moti[i]) *
+                          (motor_command_tmp.dq_ref.at(moti[i]) - vel(i)) +
+                      motor_command_tmp.tau_ff.at(moti[i]);
+      }
       LogAll();
     }
   }
