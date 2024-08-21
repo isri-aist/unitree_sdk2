@@ -391,6 +391,11 @@ private:
         table_joints_ << std::fixed << std::setprecision(4)
                       << ms_tmp_ptr->dq.at(moti[i]);
       }
+      table_joints_ << fort::endr << fort::separator << "Torques";
+      for (int i = 0; i < 10; ++i) {
+        table_joints_ << std::fixed << std::setprecision(4)
+                      << ms_tmp_ptr->tau.at(moti[i]); // tau_des_[i];
+      }
       table_joints_ << fort::endr;
     }
 
@@ -481,6 +486,7 @@ private:
     for (int i = 0; i < kNumMotors; ++i) {
       ms_tmp.q.at(i) = msg.motor_state()[i].q();
       ms_tmp.dq.at(i) = msg.motor_state()[i].dq();
+      ms_tmp.tau.at(i) = msg.motor_state()[i].tau_est();
     }
 
     motor_state_buffer_.SetData(ms_tmp);
