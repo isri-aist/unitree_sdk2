@@ -282,13 +282,13 @@ public:
       motor_command_buffer_.SetData(motor_command_tmp);
 
       // Log sensors and commands
-      /* for (int i = 0; i < kNumMotors; ++i) {
-        tau_des_(i) = motor_command_tmp.kp.at(moti[i]) *
+      for (int i = 0; i < kNumMotors; ++i) {
+        tau_des_[i] = motor_command_tmp.kp.at(moti[i]) *
                           (motor_command_tmp.q_ref.at(moti[i]) - pos(i)) +
                       motor_command_tmp.kd.at(moti[i]) *
                           (motor_command_tmp.dq_ref.at(moti[i]) - vel(i)) +
                       motor_command_tmp.tau_ff.at(moti[i]);
-      }*/
+      }
       LogAll();
     }
   }
@@ -524,6 +524,7 @@ private:
     if (bs_tmp_ptr) {
       logi("{}", *bs_tmp_ptr);
     }
+    logi("{}", "tau_des," + arrayToStringView(tau_des_));
   }
 
   void RecordMotorState(const unitree_go::msg::dds_::LowState_ &msg) {
@@ -617,6 +618,8 @@ private:
 
   Vector20 tau_ff_{0.0, 6.0, -8.0, -26.0, 36.0, 0.0, -6.0, -8.0, -26.0, 36.0,
                    0.0, 0.0, 0.0,  0.0,   0.0,  0.0, 0.0,  0.0,  0.0,   0.0};
+
+  std::array<float, kNumMotors> tau_des_ = {};
 
   Vector6 cmd_ = Vector6::Zero();
 
