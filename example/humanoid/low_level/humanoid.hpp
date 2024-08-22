@@ -352,10 +352,12 @@ private:
       // Set tables border style
       table_IMU_.set_border_style(FT_NICE_STYLE);
       table_joints_.set_border_style(FT_NICE_STYLE);
+      table_misc_.set_border_style(FT_NICE_STYLE);
 
       // Initialize headers
       table_IMU_.set_cur_cell(0, 0);
       table_joints_.set_cur_cell(0, 0);
+      table_misc_.set_cur_cell(0, 0);
       table_IMU_ << fort::header << ""
                  << "X"
                  << "Y"
@@ -371,6 +373,10 @@ private:
                     << "R Pitch"
                     << "R Knee"
                     << "R Ank" << fort::endr;
+      table_misc_ << fort::header << ""
+                  << "VX"
+                  << "VY"
+                  << "WZ" << fort::endr;
     }
 
     // Fill tables with data
@@ -382,6 +388,7 @@ private:
     // Set current cell to start of second row
     table_IMU_.set_cur_cell(1, 0);
     table_joints_.set_cur_cell(1, 0);
+    table_misc_.set_cur_cell(1, 0);
 
     // Fill IMU data
     if (bs_tmp_ptr) {
@@ -422,12 +429,17 @@ private:
       table_joints_ << fort::endr;
     }
 
+    table_misc_ << "Vel cmd" << std::fixed << std::setprecision(4) << cmd_(0)
+                << cmd_(1) << cmd_(5) << fort::endr;
+
     if (init) {
       // Set text style
       table_IMU_.row(0).set_cell_content_text_style(fort::text_style::bold);
       table_IMU_.column(0).set_cell_content_text_style(fort::text_style::bold);
       table_joints_.column(0).set_cell_content_text_style(
           fort::text_style::bold);
+      table_misc_.row(0).set_cell_content_text_style(fort::text_style::bold);
+      table_misc_.column(0).set_cell_content_text_style(fort::text_style::bold);
 
       // Set alignment
       table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
@@ -444,6 +456,15 @@ private:
         table_joints_.column(i).set_cell_text_align(fort::text_align::right);
         table_joints_.column(i).set_cell_min_width(9);
       }
+
+      table_misc_.column(0).set_cell_text_align(fort::text_align::center);
+      for (int i = 1; i < 4; ++i) {
+        table_misc_.column(i).set_cell_text_align(fort::text_align::right);
+        table_misc_.column(i).set_cell_min_width(9);
+      }
+      table_misc_[0][1].set_cell_text_align(fort::text_align::center);
+      table_misc_[0][2].set_cell_text_align(fort::text_align::center);
+      table_misc_[0][3].set_cell_text_align(fort::text_align::center);
     }
 
     switch (status_) {
@@ -478,6 +499,7 @@ private:
     std::cout << "    ┗━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
     std::cout << table_IMU_.to_string() << std::endl;
     std::cout << table_joints_.to_string() << std::endl;
+    std::cout << table_misc_.to_string() << std::endl;
     std::cout << "Time: " << time_ << std::endl;
   }
 
@@ -620,6 +642,7 @@ private:
   // Table for console display
   fort::char_table table_IMU_;
   fort::char_table table_joints_;
+  fort::char_table table_misc_;
 };
 
 // Wait for Enter key press
