@@ -199,11 +199,17 @@ public:
         time_run_ += control_dt_;
 
         // Refresh joystick
-        joy_.update_v_ref();
+        if (USE_JOYSTICK) {
+          joy_.update_v_ref();
+          cmd_ = joy_.getVRef();
+        } else {
+          cmd_ = Vector6::Zero();
+        }
 
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
-        mlpInterface_.update_observation(pos.head(10), vel.head(10), quatPermut * ori, gyro,
+        mlpInterface_.update_observation(pos.head(10), vel.head(10),
+                                         quatPermut * ori, gyro, cmd_,
                                          time_run_);
 
           /*std::cout
@@ -590,7 +596,7 @@ private:
   Vector20 tau_ff_{0.0, 6.0, -8.0, -26.0, 36.0, 0.0, -6.0, -8.0, -26.0, 36.0,
                    0.0, 0.0, 0.0,  0.0,   0.0,  0.0, 0.0,  0.0,  0.0,   0.0};
 
-  Vector20 tau_des_ = Vector20::Zero();
+  Vector6 cmd_ = Vector6::Zero();
 
   const Matrix4 quatPermut{{0, 1, 0, 0},
                            {0, 0, 1, 0},

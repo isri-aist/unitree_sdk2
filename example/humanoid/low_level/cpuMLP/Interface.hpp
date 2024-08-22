@@ -64,11 +64,12 @@ class Interface {
   /// \param[in] vel Joint velocities
   /// \param[in] ori Base orientation (Euler angles)
   /// \param[in] gyro Base angular velocities
+  /// \param[in] cmd Command vector
   /// \param[in] time Elapsed time to compute limb phases
   /// \param[in] hmap Heightmap of the terrain around the robot
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector3 gyro, float time); //, VectorN hmap);
+  void update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector3 gyro, Vector6 cmd, float time); //, VectorN hmap);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -245,7 +246,7 @@ VectorM Interface::forward() {
   return pTarget_;
 }
 
-void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector3 gyro, float time) {
+void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector3 gyro, Vector6 cmd, float time) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
@@ -262,6 +263,7 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   phases << 0.0, pi_v;
   phases += 2 * pi_v * phase_freq * time;
 
+  vel_command_ << cmd(0), cmd(1), cmd(5);
   // Filling observation vector
   obs_ << base_ang_vel * _scaleAngVel,
           vel_command_.cwiseProduct(_scaleCommand),
