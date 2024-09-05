@@ -70,7 +70,7 @@ lgd1_leg = ["Hip Yaw", "Hip Roll", "Hip Pitch", "Knee", "Ankle"]
 lgd1_arm = ["Shoulder Pitch", "Shoulder Roll", "Shoulder Yaw", "Elbow"]
 lgd2 = ["Left", "Right"]
 
-# Display leg joint positions
+# Display leg and arm joint positions
 plot_leg_arm(
     [data["q_ref"], data["q"]],
     leg_indices,
@@ -91,7 +91,7 @@ plot_leg_arm(
     " [rad]",
 )
 
-# Display leg joint velocities
+# Display leg and arm joint velocities
 plot_leg_arm(
     [data["dq_ref"], data["dq"]],
     leg_indices,
@@ -112,6 +112,20 @@ plot_leg_arm(
     " [rad/s]",
 )
 
+# Display leg joint torques
+tau_recons = data["kp"] * (data["q_ref"] - data["q"]) - data["kd"] * data["dq"]
+tau_des = data["tau_des"]
+plot_leg_arm(
+    [tau_recons, tau_des, data["tau"]],
+    leg_indices,
+    lgd1_leg,
+    lgd2,
+    ["Reconstructed", "Desired", "Measured"],
+    "Leg joint torques",
+    " [Nm]",
+)
+
+# Display IMU angular velocity
 fig, axs = plt.subplots(
     1,
     3,
@@ -132,6 +146,7 @@ plt.grid(True)
 fig.canvas.manager.set_window_title("Angular velocity [rad/s]")
 
 
+# Compute IMU projected gravity from IMU quaternion
 def transformBodyQuat(bodyQuat):
 
     # Body QUAT and gravity vector of 0 , 0, -1
@@ -152,6 +167,7 @@ def transformBodyQuat(bodyQuat):
 
 projected_grav = transformBodyQuat(data["quat"])
 
+# Display IMU projected gravity
 fig, axs = plt.subplots(
     1,
     3,
@@ -171,7 +187,8 @@ plt.legend()
 plt.grid(True)
 fig.canvas.manager.set_window_title("Projected gravity")
 
-if SAVEFIGS:
-    plt.savefig(self.checkpoint_name + "_joint_pos.png")
+# Save the figures
+#if SAVEFIGS:
+#    plt.savefig(self.checkpoint_name + "_joint_pos.png")
 
 plt.show()
