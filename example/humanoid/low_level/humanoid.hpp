@@ -41,7 +41,7 @@ void waiting(HumanoidExample *HE);
 class HumanoidExample {
 public:
   HumanoidExample(const std::string &networkInterface = "")
-      : mlpInterface_(43, 0, 10, 1, 1) {
+      : mlpInterface_(39, 3, 10, 1, 1) {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 

@@ -105,12 +105,15 @@ class Interface {
   // Control policy
   MLP policy_;
 
-  // Estimation policy
-  MLP adaptationModel_;
-  const bool useAdaptation = false;
-
   // Observation scaler
   Scaler observationScaler_;
+
+  // Estimation policy
+  MLP estimatorModel_;
+  const bool useEstimator = true;
+
+  // Estimation output scaler
+  Scaler estimatorScaler_;
 
   // scales
   double _scaleAction, _hipReduction, _scaleQ, _scaleQd, _scaleLinVel, _scaleAngVel, _scaleHeights;
@@ -137,8 +140,9 @@ class Interface {
 
 Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples, int historyStep) {
   policy_ = MLP(std::vector<int>({512, 256, 128}), obsDim + latentDim, nJoints);
-  if (useAdaptation) {
-    adaptationModel_ = MLP(std::vector<int>({64, 32}), obsDim * historySamples, latentDim);
+  if (useEstimator) {
+    estimatorModel_ = MLP(std::vector<int>({512, 256, 128}), obsDim * historySamples, latentDim);
+    observationScaler_ = Scaler(latentDim);
   }
   observationScaler_ = Scaler(obsDim);
   obsDim_ = obsDim;
@@ -166,8 +170,10 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
 
 void Interface::initialize(std::string polDirName, VectorM q_init, float action_scale) {
   policy_.updateParamFromTxt(polDirName + "actor.txt");
-  if (useAdaptation) {
-    adaptationModel_.updateParamFromTxt(polDirName + "student.txt");
+  if (useEstimator) {
+    estimatorModel_.updateParamFromTxt(polDirName + "estimator.txt");
+    estimatorScaler_.updateRunningMeanFromTxt(polDirName + "running_mean_vel.txt");
+    estimatorScaler_.updateRunningVarFromTxt(polDirName + "running_var_vel.txt");
   }
   observationScaler_.updateRunningMeanFromTxt(polDirName + "running_mean.txt");
   observationScaler_.updateRunningVarFromTxt(polDirName + "running_var.txt");
@@ -208,9 +214,9 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
 }
 
 VectorM Interface::forward() {
-  if (useAdaptation) {
-    latentOut_ = adaptationModel_.forward(studentObs_);
-    actorObs_ << latentOut_, historyObs_.head(obsDim_);
+  if (useEstimator) {
+    latentOut_ = estimatorModel_.forward(studentObs_);
+    actorObs_ << historyObs_.head(obsDim_), estimatorScaler_.scale(latentOut_);
   } else {
     actorObs_ << historyObs_.head(obsDim_);
   }
@@ -258,17 +264,19 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   Vector3 base_ang_vel = gyro;
   
   // Compute limb phase based on ellapsed time
+  /*
   const float phase_freq = 1.25;
   Eigen::Array<float, 2, 1> phases;
   phases << 0.0, pi_v;
   phases += 2 * pi_v * phase_freq * time;
+  */
 
   vel_command_ << cmd(0), cmd(1), cmd(5);
   // Filling observation vector
   obs_ << base_ang_vel * _scaleAngVel,
           vel_command_.cwiseProduct(_scaleCommand),
-          Eigen::cos(phases),
-          Eigen::sin(phases),
+          // Eigen::cos(phases),
+          // Eigen::sin(phases),
           projected_gravity,
           pos * _scaleQ,
           vel * _scaleQd,
