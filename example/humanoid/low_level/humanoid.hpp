@@ -1,12 +1,12 @@
 #pragma once
 
+#include <chrono>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <stdint.h>
 #include <string>
 #include <thread>
-#include <chrono>
 
 #include "unitree/robot/channel/channel_publisher.hpp"
 #include "unitree/robot/channel/channel_subscriber.hpp"
@@ -283,11 +283,11 @@ public:
 
       // Log sensors and commands
       for (int i = 0; i < kNumMotors; ++i) {
-        tau_des_[i] = motor_command_tmp.kp.at(moti[i]) *
-                          (motor_command_tmp.q_ref.at(moti[i]) - pos(i)) +
-                      motor_command_tmp.kd.at(moti[i]) *
-                          (motor_command_tmp.dq_ref.at(moti[i]) - vel(i)) +
-                      motor_command_tmp.tau_ff.at(moti[i]);
+        tau_des_[i] = motor_command_tmp.kp.at(i) *
+                          (motor_command_tmp.q_ref.at(i) - ms_tmp_ptr->q.at(i)) +
+                      motor_command_tmp.kd.at(i) *
+                          (motor_command_tmp.dq_ref.at(i) - ms_tmp_ptr->dq.at(i)) +
+                      motor_command_tmp.tau_ff.at(i);
       }
       LogAll();
     }

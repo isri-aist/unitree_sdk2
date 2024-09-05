@@ -43,7 +43,8 @@ template <> struct fmt::formatter<MotorState> : formatter<string_view> {
 
     const std::string q = "q," + arrayToStringView(ms.q);
     const std::string dq = "dq," + arrayToStringView(ms.dq);
-    const std::string all = q + "\n" + dq;
+    const std::string tau = "tau," + arrayToStringView(ms.tau);
+    const std::string all = q + "\n" + dq + "\n" + tau;
 
     string_view name = all;
 

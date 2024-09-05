@@ -18,6 +18,7 @@ struct MotorCommand {
 struct MotorState {
   std::array<float, kNumMotors> q = {};
   std::array<float, kNumMotors> dq = {};
+  std::array<float, kNumMotors> tau = {};
 };
 
 enum JointIndex {
