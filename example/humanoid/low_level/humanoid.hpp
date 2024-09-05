@@ -70,13 +70,9 @@ public:
         "report_sensors", UT_CPU_ID_NONE, report_period_us,
         &HumanoidExample::UpdateTables, this, false);
 
-    // Define Kp and Kd gains
-    kp_.fill(60.0);
-    kd_.fill(1.5);
-    kp_.head(11) << 200, 200, 200, 300, 40, 200, 200, 200, 300, 40, 200.0;
-    kd_.head(11) << 5, 5, 5, 6, 2, 5, 5, 5, 6, 2, 5.0;
-
     kp_ *= 0.0;
+    kd_ *= 0.0;
+
     // Create the link with the joystick
     if (USE_JOYSTICK) {
       joy_.initialize(control_dt_);
