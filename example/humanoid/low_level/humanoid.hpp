@@ -45,13 +45,13 @@ public:
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 
-    /*lowcmd_publisher_.reset(
+    lowcmd_publisher_.reset(
         new unitree::robot::ChannelPublisher<unitree_go::msg::dds_::LowCmd_>(
             kTopicLowCommand));
     lowcmd_publisher_->InitChannel();
     command_writer_ptr_ = unitree::common::CreateRecurrentThreadEx(
         "command_writer", UT_CPU_ID_NONE, 2000,
-        &HumanoidExample::LowCommandWriter, this);*/
+        &HumanoidExample::LowCommandWriter, this);
 
     lowstate_subscriber_.reset(
         new unitree::robot::ChannelSubscriber<unitree_go::msg::dds_::LowState_>(
