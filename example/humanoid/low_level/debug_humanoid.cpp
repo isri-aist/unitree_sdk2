@@ -31,19 +31,21 @@ int main() {
   Vector10 vel = Vector10::Zero();
   Vector4 ori {0.0, 0.0, 0.0, 1.0};
   Vector3 gyro = Vector3::Zero();
+  Vector6 cmd = Vector6::Zero();
   float time = 0.0;
-  mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro, time);
+  mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro, cmd, time);
 
   std::cout << "================" << std::endl;
   std::cout << mlpInterface_.forward() << std::endl;
 
   Joystick joy;
-  joy.initialize();
+  joy.initialize(0.02);
   std::cout << joy.getVRef() << std::endl;
 
   while (true) {
-    joy.update_v_ref_gamepad(0, false);
-    std::this_thread::sleep_for(200ms);
+    joy.update_v_ref();
+    std::this_thread::sleep_for(20ms);
+    std::cout << joy.getVRef().transpose() << std::endl;
   }
 
   return 0;
