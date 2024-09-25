@@ -222,10 +222,12 @@ public:
               << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
               << std::endl;*/
 
-        Vector10 policy_cmd = mlpInterface_.forward();
-        Vector10 network_cmd = policy_cmd; // q_init_.head(10);
+        VectorM policy_cmd = mlpInterface_.forward();
+        policy_cmd.tail(4) *= 0.0;
+        VectorM network_cmd = policy_cmd; // q_init_.head(10);
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
+          // Discard arm commands for now
           q_des = i < 10 ? network_cmd(i) : q_init_(i);
           motor_command_tmp.kp.at(moti[i]) = kp_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_(i);
