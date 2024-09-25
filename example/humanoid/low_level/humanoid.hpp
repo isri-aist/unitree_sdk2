@@ -279,11 +279,12 @@ public:
 
       // Log sensors and commands
       for (int i = 0; i < kNumMotors; ++i) {
-        tau_des_[i] = motor_command_tmp.kp.at(i) *
-                          (motor_command_tmp.q_ref.at(i) - ms_tmp_ptr->q.at(i)) +
-                      motor_command_tmp.kd.at(i) *
-                          (motor_command_tmp.dq_ref.at(i) - ms_tmp_ptr->dq.at(i)) +
-                      motor_command_tmp.tau_ff.at(i);
+        tau_des_[i] =
+            motor_command_tmp.kp.at(i) *
+                (motor_command_tmp.q_ref.at(i) - ms_tmp_ptr->q.at(i)) +
+            motor_command_tmp.kd.at(i) *
+                (motor_command_tmp.dq_ref.at(i) - ms_tmp_ptr->dq.at(i)) +
+            motor_command_tmp.tau_ff.at(i);
       }
       LogAll();
     }
@@ -354,25 +355,12 @@ private:
       table_IMU_.set_cur_cell(0, 0);
       table_joints_.set_cur_cell(0, 0);
       table_misc_.set_cur_cell(0, 0);
-      table_IMU_ << fort::header << ""
-                 << "X"
-                 << "Y"
-                 << "Z" << fort::endr;
-      table_joints_ << fort::header << ""
-                    << "L Yaw"
-                    << "L Roll"
-                    << "L Pitch"
-                    << "L Knee"
-                    << "L Ank";
-      table_joints_ << "R Yaw"
-                    << "R Roll"
-                    << "R Pitch"
-                    << "R Knee"
-                    << "R Ank" << fort::endr;
-      table_misc_ << fort::header << ""
-                  << "VX"
-                  << "VY"
-                  << "WZ" << fort::endr;
+      table_IMU_ << fort::header << "" << "X" << "Y" << "Z" << fort::endr;
+      table_joints_ << fort::header << "" << "L Yaw" << "L Roll" << "L Pitch"
+                    << "L Knee" << "L Ank";
+      table_joints_ << "R Yaw" << "R Roll" << "R Pitch" << "R Knee" << "R Ank"
+                    << fort::endr;
+      table_misc_ << fort::header << "" << "VX" << "VY" << "WZ" << fort::endr;
     }
 
     // Fill tables with data
