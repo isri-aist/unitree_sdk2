@@ -108,12 +108,12 @@ class Interface {
   // Observation scaler
   Scaler observationScaler_;
 
-  // Estimation policy
-  MLP estimatorModel_;
-  const bool useEstimator = true;
+  // Encoder policy
+  MLP encoderModel_;
+  const bool useEncoder = true;
 
-  // Estimation output scaler
-  Scaler estimatorScaler_;
+  // Encoder output scaler
+  Scaler encoderScaler_;
 
   // scales
   double _scaleAction, _hipReduction, _scaleQ, _scaleQd, _scaleLinVel, _scaleAngVel, _scaleHeights;
@@ -140,7 +140,7 @@ class Interface {
 
 Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples, int historyStep) {
   policy_ = MLP(std::vector<int>({512, 256, 128}), obsDim + latentDim, nJoints);
-  if (useEstimator) {
+  if (useEncoder) {
     estimatorModel_ = MLP(std::vector<int>({512, 256, 128}), obsDim * historySamples, latentDim);
     observationScaler_ = Scaler(latentDim);
   }
@@ -170,10 +170,10 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
 
 void Interface::initialize(std::string polDirName, VectorM q_init, float action_scale) {
   policy_.updateParamFromTxt(polDirName + "actor.txt");
-  if (useEstimator) {
+  if (useEncoder) {
     estimatorModel_.updateParamFromTxt(polDirName + "estimator.txt");
-    estimatorScaler_.updateRunningMeanFromTxt(polDirName + "running_mean_vel.txt");
-    estimatorScaler_.updateRunningVarFromTxt(polDirName + "running_var_vel.txt");
+    encoderScaler_.updateRunningMeanFromTxt(polDirName + "running_mean_latent.txt");
+    encoderScaler_.updateRunningVarFromTxt(polDirName + "running_var_latent.txt");
   }
   observationScaler_.updateRunningMeanFromTxt(polDirName + "running_mean.txt");
   observationScaler_.updateRunningVarFromTxt(polDirName + "running_var.txt");
@@ -214,9 +214,9 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
 }
 
 VectorM Interface::forward() {
-  if (useEstimator) {
+  if (useEncoder) {
     latentOut_ = estimatorModel_.forward(studentObs_);
-    actorObs_ << historyObs_.head(obsDim_), estimatorScaler_.scale(latentOut_);
+    actorObs_ << historyObs_.head(obsDim_), encoderScaler_.scale(latentOut_);
   } else {
     actorObs_ << historyObs_.head(obsDim_);
   }
