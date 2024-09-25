@@ -14,7 +14,7 @@
 #include "cpuMLP.hpp"
 
 constexpr float pi_v = 3.14159265358979323846;
-using VectorM = Vector10;
+using VectorM = Vector14;
 
 class Interface {
  public:
