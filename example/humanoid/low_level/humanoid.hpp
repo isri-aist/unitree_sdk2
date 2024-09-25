@@ -41,7 +41,7 @@ void waiting(HumanoidExample *HE);
 class HumanoidExample {
 public:
   HumanoidExample(const std::string &networkInterface = "")
-      : mlpInterface_(39, 3, 10, 1, 1) {
+      : mlpInterface_(55, 3, 14, 1, 1) {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 
@@ -204,9 +204,18 @@ public:
 
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
-        mlpInterface_.update_observation(pos.head(10), vel.head(10),
-                                         quatPermut * ori, gyro, cmd_,
-                                         time_run_);
+        VectorM q_obs = VectorM::Zero();
+        VectorM dq_obs = VectorM::Zero();
+        // Retrieving leg joints and roll/pitch arm joints
+        q_obs.head(10) = pos.head(10);
+        q_obs.block(10, 0, 2, 1) = pos.block(11, 0, 2, 1);
+        q_obs.block(12, 0, 2, 1) = pos.block(15, 0, 2, 1);
+        dq_obs.head(10) = vel.head(10);
+        dq_obs.block(10, 0, 2, 1) = vel.block(11, 0, 2, 1);
+        dq_obs.block(12, 0, 2, 1) = vel.block(15, 0, 2, 1);
+
+        mlpInterface_.update_observation(q_obs, dq_obs, quatPermut * ori, gyro,
+                                         cmd_, time_run_);
 
           /*std::cout
               << std::setprecision(4)
