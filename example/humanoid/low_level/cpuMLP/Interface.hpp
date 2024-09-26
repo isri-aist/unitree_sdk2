@@ -135,6 +135,10 @@ class Interface {
   std::chrono::time_point<std::chrono::steady_clock> t_start_;
   std::chrono::time_point<std::chrono::steady_clock> t_end_;
 
+  // Related to leg phases
+  Vector2 phases_freq_;
+  Eigen::Array<float, 2, 1> phases_;
+
   // orientation
   Eigen::Vector3f _gravityVec, _qa, _qb, _qc, _qvec;
   float q_w = 0.0;
@@ -197,6 +201,10 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
 
   // Initial position
   q_init_ = q_init;
+
+  // Initial phases
+  phases_freq_.setZero();
+  phases_ << 0.0, pi_v;
 
   // SetZero
   pTarget_.setZero();
@@ -266,7 +274,23 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
 
   Vector3 base_ang_vel = gyro;
   
-  // Compute limb phase based on ellapsed time
+  // Compute limb phase
+  float rem = std::remainder(phases_(0), 2 * pi_v);
+  bool refresh = ((rem + 2 * pi_v * phases_freq_(0) * dt_) > 2 * pi_v) || (phases_freq_(0) == 0.0);
+  float norm = std::sqrt(cmd(0) * cmd(0) + cmd(1) * cmd(1) + cmd(2) * cmd(2));
+  const float deadzone = 0.1;
+
+  phases_ += 2 * pi_v * phases_freq_(0) * dt_;
+
+  if (refresh) {
+    phases_freq_(0) = phases_freq_(1);
+    if (norm < deadzone) {
+      phases_freq_(1) = 0.0;
+    } else {
+      phases_freq_(1) = 0.75 + 0.75 * (norm - deadzone);
+    }
+  }
+
   /*
   const float phase_freq = 1.25;
   Eigen::Array<float, 2, 1> phases;
@@ -278,8 +302,8 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   // Filling observation vector
   obs_ << base_ang_vel * _scaleAngVel,
           vel_command_.cwiseProduct(_scaleCommand),
-          // Eigen::cos(phases),
-          // Eigen::sin(phases),
+          Eigen::cos(phases_),
+          Eigen::sin(phases_),
           projected_gravity,
           pos * _scaleQ,
           vel * _scaleQd,
