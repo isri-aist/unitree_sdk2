@@ -45,9 +45,10 @@ class Interface {
   /// \param[in] polDirName Name of directory that contains policy parameters
   /// \param[in] q_init Initial joint configuration of the robot
   /// \param[in] action_scale Scaling parameters for actions
+  /// \param[in] dt Control time step
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void initialize(std::string polDirName, VectorM q_init, float action_scale);
+  void initialize(std::string polDirName, VectorM q_init, float action_scale, float dt);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -130,6 +131,7 @@ class Interface {
   Eigen::Matrix<float, 3, 1> _bodyAngularVel;
   Eigen::Matrix<float, 4, 1> _bodyQuat;
   VectorM bound_pi_;
+  float dt_;
   std::chrono::time_point<std::chrono::steady_clock> t_start_;
   std::chrono::time_point<std::chrono::steady_clock> t_end_;
 
@@ -168,7 +170,7 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
             << " | historyLength: " << historyLength_ << std::endl;
 }
 
-void Interface::initialize(std::string polDirName, VectorM q_init, float action_scale) {
+void Interface::initialize(std::string polDirName, VectorM q_init, float action_scale, float dt) {
   policy_.updateParamFromTxt(polDirName + "actor.txt");
   if (useEncoder) {
     estimatorModel_.updateParamFromTxt(polDirName + "estimator.txt");
@@ -209,6 +211,7 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
   bound_pi_ << VectorM::Ones() * pi_v;
 
   // Initial times
+  dt_ = dt;
   t_start_ = std::chrono::steady_clock::now();
   t_end_ = std::chrono::steady_clock::now();
 }
