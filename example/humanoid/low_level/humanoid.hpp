@@ -80,8 +80,8 @@ public:
 
     // Create link with MLP
     mlpInterface_.initialize(
-        "/home/paleziart/git/policies/H1Terrain_08-15_14-39-47/nn/",
-        q_init_.head(10), 0.5);
+        "/home/paleziart/git/policies/H1Terrain_09-25_18-22-36/nn/",
+        q_init_.head(10), 0.5, control_dt_);
 
     // Initialize tables for console display
     UpdateTables(true);
