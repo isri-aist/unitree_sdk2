@@ -20,23 +20,23 @@ int main() {
       0.0};                                                  // Unused joint
 
   // MLP interface
-  Interface mlpInterface_(43, 0, 10, 1, 1);
+  Interface mlpInterface_(55, 3, 14, 1, 1);
 
   // Create link with MLP
   mlpInterface_.initialize(
-      "/home/paleziart/git/policies/H1Terrain_08-01_11-22-18/nn/",
-      q_init.head(10), 0.25);
+      "/home/paleziart/git/policies/H1Terrain_09-25_18-22-36/nn/",
+      q_init.head(10), 0.5, 0.02);
 
-  Vector10 pos = q_init.head(10);
-  Vector10 vel = Vector10::Zero();
-  Vector4 ori {0.0, 0.0, 0.0, 1.0};
+  Vector14 pos = q_init.head(14);
+  Vector14 vel = Vector14::Zero();
+  Vector4 ori{0.0, 0.0, 0.0, 1.0};
   Vector3 gyro = Vector3::Zero();
   Vector6 cmd = Vector6::Zero();
   float time = 0.0;
-  mlpInterface_.update_observation(pos.head(10), vel.head(10), ori, gyro, cmd, time);
+  mlpInterface_.update_observation(pos.head(14), vel.head(14), ori, gyro, cmd,
+                                   time);
 
-  std::cout << "================" << std::endl;
-  std::cout << mlpInterface_.forward() << std::endl;
+  mlpInterface_.forward();
 
   Joystick joy;
   joy.initialize(0.02);
@@ -47,6 +47,6 @@ int main() {
     std::this_thread::sleep_for(20ms);
     std::cout << joy.getVRef().transpose() << std::endl;
   }
-
+  
   return 0;
 }
