@@ -275,7 +275,7 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   Vector3 base_ang_vel = gyro;
   
   // Compute limb phase
-  float rem = std::remainder(phases_(0), 2 * pi_v);
+  float rem = std::fmod(phases_(0), 2 * pi_v);
   bool refresh = ((rem + 2 * pi_v * phases_freq_(0) * dt_) > 2 * pi_v) || (phases_freq_(0) == 0.0);
   float norm = std::sqrt(cmd(0) * cmd(0) + cmd(1) * cmd(1) + cmd(2) * cmd(2));
   const float deadzone = 0.1;
