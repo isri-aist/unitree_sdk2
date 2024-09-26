@@ -147,8 +147,8 @@ class Interface {
 Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples, int historyStep) {
   policy_ = MLP(std::vector<int>({512, 256, 128}), obsDim + latentDim, nJoints);
   if (useEncoder) {
-    estimatorModel_ = MLP(std::vector<int>({512, 256, 128}), obsDim * historySamples, latentDim);
-    observationScaler_ = Scaler(latentDim);
+    encoderModel_ = MLP(std::vector<int>({128, 64}), obsDim * historySamples, latentDim);
+    encoderScaler_ = Scaler(latentDim);
   }
   observationScaler_ = Scaler(obsDim);
   obsDim_ = obsDim;
@@ -177,7 +177,7 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
 void Interface::initialize(std::string polDirName, VectorM q_init, float action_scale, float dt) {
   policy_.updateParamFromTxt(polDirName + "actor.txt");
   if (useEncoder) {
-    estimatorModel_.updateParamFromTxt(polDirName + "estimator.txt");
+    encoderModel_.updateParamFromTxt(polDirName + "encoder.txt");
     encoderScaler_.updateRunningMeanFromTxt(polDirName + "running_mean_latent.txt");
     encoderScaler_.updateRunningVarFromTxt(polDirName + "running_var_latent.txt");
   }
@@ -226,7 +226,7 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
 
 VectorM Interface::forward() {
   if (useEncoder) {
-    latentOut_ = estimatorModel_.forward(studentObs_);
+    latentOut_ = encoderModel_.forward(studentObs_);
     actorObs_ << historyObs_.head(obsDim_), encoderScaler_.scale(latentOut_);
   } else {
     actorObs_ << historyObs_.head(obsDim_);
