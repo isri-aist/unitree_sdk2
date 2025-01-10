@@ -1,6 +1,22 @@
 # unitree_sdk2
 Unitree robot sdk version 2.
 
+### How to deploy a policy on H1
+
+To build the controller and deploy:
+
+```bash
+mkdir build
+cd build
+cmake ..
+make -sj3
+./bin/h1_low_level_example enp3s0
+```
+
+For now the code can only deploy a linear MLP with Elu activation layers.
+
+The main files to modify are `example/humanoid/low_level/cpuMLP/Interface.hpp` and `example/humanoid/low_level/humanoid.hpp`.
+
 ### Prebuild environment
 * OS  (Ubuntu 20.04 LTS)  
 * CPU  (aarch64 and x86_64)   
