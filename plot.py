@@ -25,8 +25,10 @@ for row in datareader:
     # data.setdefault(row[0].split(",", 0)[0], []).append([float(elem) for elem in row[0].split(",")[1:]])
     data.setdefault(row[0], []).append([float(elem) for elem in row[1:]])
 
+NTOT = len(data["time"])
+
 for key in data.keys():
-    data[key] = np.array(data[key])
+    data[key] = np.array(data[key][:NTOT-1])
 
 
 joint_indices = [7, 3, 4, 5, 10, 8, 0, 1, 2, 11, 6, 16, 17, 18, 19, 12, 13, 14, 15, 9]
@@ -122,6 +124,16 @@ plot_leg_arm(
     lgd2,
     ["Reconstructed", "Desired", "Measured"],
     "Leg joint torques",
+    " [Nm]",
+)
+
+plot_leg_arm(
+    [tau_recons, tau_des, data["tau"]],
+    arm_indices,
+    lgd1_arm,
+    lgd2,
+    ["Reconstructed", "Desired", "Measured"],
+    "Arm joint torques",
     " [Nm]",
 )
 
