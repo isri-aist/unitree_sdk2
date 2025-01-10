@@ -236,7 +236,8 @@ VectorM Interface::forward() {
 
   actions_ = policy_.forward(actorObs_);
 
-  // std::cout << actions_.transpose() << std::endl;
+  // Force arm actions to 0
+  actions_.tail(4) *= 0.0;
 
   /*if (iter_ < 5) {
   // std::cout << "---raw hist: " << historyObs_.transpose() << std::endl;
