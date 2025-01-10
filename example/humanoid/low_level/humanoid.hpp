@@ -178,8 +178,8 @@ public:
       }
 
       // Check if joints are too close from position limits
-      const bool lim_lower = ((pos - 0.85 * q_lim_lower).array() < 0.0).any();
-      const bool lim_upper = ((pos - 0.85 * q_lim_upper).array() > 0.0).any();
+      const bool lim_lower = ((pos - 0.9 * q_lim_lower).array() < 0.0).any();
+      const bool lim_upper = ((pos - 0.9 * q_lim_upper).array() > 0.0).any();
 
       if (lim_lower || lim_upper) {
         status_ = STATUS_DAMPING;
