@@ -111,7 +111,7 @@ class Interface {
 
   // Encoder policy
   MLP encoderModel_;
-  const bool useEncoder = true;
+  const bool useEncoder = false;
 
   // Encoder output scaler
   Scaler encoderScaler_;
