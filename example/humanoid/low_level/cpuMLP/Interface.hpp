@@ -278,7 +278,7 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   // Compute limb phase
   float rem = std::fmod(phases_(0), 2 * pi_v);
   bool refresh = ((rem + 2 * pi_v * phases_freq_(0) * dt_) > 2 * pi_v) || (phases_freq_(0) == 0.0);
-  float norm = std::sqrt(cmd(0) * cmd(0) + cmd(1) * cmd(1) + cmd(2) * cmd(2));
+  float norm = std::sqrt(cmd(0) * cmd(0) + cmd(1) * cmd(1) + cmd(5) * cmd(5));
   const float deadzone = 0.1;
 
   phases_ += 2 * pi_v * phases_freq_(0) * dt_;
@@ -288,7 +288,7 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
     if (norm < deadzone) {
       phases_freq_(1) = 0.0;
     } else {
-      phases_freq_(1) = 0.75 + 0.75 * (norm - deadzone);
+      phases_freq_(1) = 1.25 + 0.5 * (norm - deadzone);
     }
   }
 
@@ -303,8 +303,8 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   // Filling observation vector
   obs_ << base_ang_vel * _scaleAngVel,
           vel_command_.cwiseProduct(_scaleCommand),
-          Eigen::cos(phases_),
-          Eigen::sin(phases_),
+          // Eigen::cos(phases_),
+          // Eigen::sin(phases_),
           projected_gravity,
           pos * _scaleQ,
           vel * _scaleQd,
