@@ -359,17 +359,23 @@ private:
     if (init) {
       // Set tables border style
       table_IMU_.set_border_style(FT_NICE_STYLE);
-      table_joints_.set_border_style(FT_NICE_STYLE);
+      table_legs_.set_border_style(FT_NICE_STYLE);
+      table_arms_.set_border_style(FT_NICE_STYLE);
       table_misc_.set_border_style(FT_NICE_STYLE);
 
       // Initialize headers
       table_IMU_.set_cur_cell(0, 0);
-      table_joints_.set_cur_cell(0, 0);
+      table_legs_.set_cur_cell(0, 0);
+      table_arms_.set_cur_cell(0, 0);
       table_misc_.set_cur_cell(0, 0);
       table_IMU_ << fort::header << "" << "X" << "Y" << "Z" << fort::endr;
-      table_joints_ << fort::header << "" << "L Yaw" << "L Roll" << "L Pitch"
+      table_legs_ << fort::header << "" << "L Yaw" << "L Roll" << "L Pitch"
                     << "L Knee" << "L Ank";
-      table_joints_ << "R Yaw" << "R Roll" << "R Pitch" << "R Knee" << "R Ank"
+      table_legs_ << "R Yaw" << "R Roll" << "R Pitch" << "R Knee" << "R Ank"
+                    << fort::endr;
+      table_arms_ << fort::header << "" << "L Pitch" << "L Roll" << "L Yaw"
+                    << "L Elbow";
+      table_arms_ << "R Pitch" << "R Roll" << "R Yaw" << "R Elbow"
                     << fort::endr;
       table_misc_ << fort::header << "" << "VX" << "VY" << "WZ" << fort::endr;
     }
@@ -382,7 +388,8 @@ private:
 
     // Set current cell to start of second row
     table_IMU_.set_cur_cell(1, 0);
-    table_joints_.set_cur_cell(1, 0);
+    table_legs_.set_cur_cell(1, 0);
+    table_arms_.set_cur_cell(1, 0);
     table_misc_.set_cur_cell(1, 0);
 
     // Fill IMU data
@@ -406,22 +413,40 @@ private:
 
     // Fill joint data
     if (ms_tmp_ptr) {
-      table_joints_ << "Pos";
+      table_legs_ << "Pos";
       for (int i = 0; i < 10; ++i) {
-        table_joints_ << std::fixed << std::setprecision(4)
+        table_legs_ << std::fixed << std::setprecision(4)
                       << ms_tmp_ptr->q.at(moti[i]);
       }
-      table_joints_ << fort::endr << fort::separator << "Vel";
+      table_legs_ << fort::endr << fort::separator << "Vel";
       for (int i = 0; i < 10; ++i) {
-        table_joints_ << std::fixed << std::setprecision(4)
+        table_legs_ << std::fixed << std::setprecision(4)
                       << ms_tmp_ptr->dq.at(moti[i]);
       }
-      table_joints_ << fort::endr << fort::separator << "Torques";
+      table_legs_ << fort::endr << fort::separator << "Torques";
       for (int i = 0; i < 10; ++i) {
-        table_joints_ << std::fixed << std::setprecision(4)
+        table_legs_ << std::fixed << std::setprecision(4)
                       << ms_tmp_ptr->tau.at(moti[i]); // tau_des_[i];
       }
-      table_joints_ << fort::endr;
+      table_legs_ << fort::endr;
+
+      table_arms_ << "Pos";
+      for (int i = 11; i < 19; ++i) {
+        table_arms_ << std::fixed << std::setprecision(4)
+                      << ms_tmp_ptr->q.at(moti[i]);
+      }
+      table_arms_ << fort::endr << fort::separator << "Vel";
+      for (int i = 11; i < 19; ++i) {
+        table_arms_ << std::fixed << std::setprecision(4)
+                      << ms_tmp_ptr->dq.at(moti[i]);
+      }
+      table_arms_ << fort::endr << fort::separator << "Torques";
+      for (int i = 11; i < 19; ++i) {
+        table_arms_ << std::fixed << std::setprecision(4)
+                      << ms_tmp_ptr->tau.at(moti[i]); // tau_des_[i];
+      }
+      table_arms_ << fort::endr;
+
     }
 
     table_misc_ << "Vel cmd" << std::fixed << std::setprecision(4) << cmd_(0)
@@ -431,7 +456,9 @@ private:
       // Set text style
       table_IMU_.row(0).set_cell_content_text_style(fort::text_style::bold);
       table_IMU_.column(0).set_cell_content_text_style(fort::text_style::bold);
-      table_joints_.column(0).set_cell_content_text_style(
+      table_legs_.column(0).set_cell_content_text_style(
+          fort::text_style::bold);
+      table_arms_.column(0).set_cell_content_text_style(
           fort::text_style::bold);
       table_misc_.row(0).set_cell_content_text_style(fort::text_style::bold);
       table_misc_.column(0).set_cell_content_text_style(fort::text_style::bold);
@@ -446,10 +473,16 @@ private:
       table_IMU_[0][2].set_cell_text_align(fort::text_align::center);
       table_IMU_[0][3].set_cell_text_align(fort::text_align::center);
 
-      table_joints_.column(0).set_cell_text_align(fort::text_align::center);
+      table_legs_.column(0).set_cell_text_align(fort::text_align::center);
       for (int i = 1; i < 11; ++i) {
-        table_joints_.column(i).set_cell_text_align(fort::text_align::right);
-        table_joints_.column(i).set_cell_min_width(9);
+        table_legs_.column(i).set_cell_text_align(fort::text_align::right);
+        table_legs_.column(i).set_cell_min_width(9);
+      }
+
+      table_arms_.column(0).set_cell_text_align(fort::text_align::center);
+      for (int i = 1; i < 11; ++i) {
+        table_arms_.column(i).set_cell_text_align(fort::text_align::right);
+        table_arms_.column(i).set_cell_min_width(9);
       }
 
       table_misc_.column(0).set_cell_text_align(fort::text_align::center);
@@ -493,7 +526,8 @@ private:
     std::cout << "    ┃    Sensor Data    ┃" << std::endl;
     std::cout << "    ┗━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
     std::cout << table_IMU_.to_string() << std::endl;
-    std::cout << table_joints_.to_string() << std::endl;
+    std::cout << table_legs_.to_string() << std::endl;
+    std::cout << table_arms_.to_string() << std::endl;
     std::cout << table_misc_.to_string() << std::endl;
     std::cout << "Time: " << time_ << std::endl;
   }
@@ -639,7 +673,8 @@ private:
 
   // Table for console display
   fort::char_table table_IMU_;
-  fort::char_table table_joints_;
+  fort::char_table table_legs_;
+  fort::char_table table_arms_;
   fort::char_table table_misc_;
 };
 
