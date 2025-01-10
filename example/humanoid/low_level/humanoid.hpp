@@ -24,7 +24,7 @@
 #include "logger.hpp"
 #include "motors.hpp"
 
-#define USE_JOYSTICK false
+#define USE_JOYSTICK true
 
 #define STATUS_INIT 0
 #define STATUS_WAITING_AIR 1
