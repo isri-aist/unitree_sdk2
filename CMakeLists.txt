@@ -66,6 +66,37 @@ target_include_directories(unitree_sdk2 INTERFACE fmtlog)
 target_include_directories(unitree_sdk2 INTERFACE libfort)
 target_include_directories(unitree_sdk2 INTERFACE /home/paleziart/install/include)
 
+#### ONNX RUNTIME
+
+option(onnxruntime_USE_CUDA "Build with CUDA support" OFF)
+option(onnxruntime_USE_TENSORRT "Build with TensorRT support" OFF)
+include(FetchContent)
+
+set(ONNXRUNTIME_ROOTDIR "/home/paleziart/git/test_onnx/mini/onnxruntime")
+
+# The ORT package has a different include directory structure to a local install via cmake.
+# We added the path for the pre-built package above. Add the path for a local install to support either usage.
+# TODO: If we want to support additional EPs being loadable from a local install we also need to add EP specific
+# directories under /include/onnxruntime/core/providers
+include_directories("${ONNXRUNTIME_ROOTDIR}/include"                           # Pre-built package
+                    "${ONNXRUNTIME_ROOTDIR}/include/onnxruntime"               # Linux local install to /usr/local
+                    "${ONNXRUNTIME_ROOTDIR}/include/onnxruntime/core/session") # Windows local install
+
+link_directories("${ONNXRUNTIME_ROOTDIR}/lib")
+
+if(onnxruntime_USE_CUDA)
+  add_definitions(-DUSE_CUDA)
+endif()
+if(onnxruntime_USE_TENSORRT)
+  add_definitions(-DUSE_TENSORRT)
+endif()
+if(onnxruntime_USE_DML)
+  message("Enabling DML")
+  add_definitions(-DUSE_DML)
+endif()
+
+####
+
 if (BUILD_EXAMPLES)
     add_subdirectory(example)
 endif ()
