@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include "cpuMLP/Interface.hpp"
+#include "Types.h"
 
 class OnnxWrapper {
 public:

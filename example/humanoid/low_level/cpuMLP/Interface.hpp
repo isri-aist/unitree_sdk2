@@ -12,9 +12,9 @@
 
 #include "Types.h"
 #include "cpuMLP.hpp"
+#include "OnnxWrapper.hpp"
 
 constexpr float pi_v = 3.14159265358979323846;
-using VectorM = Vector14;
 
 class Interface {
  public:
@@ -42,13 +42,13 @@ class Interface {
   ///
   /// \brief Initializer
   ///
-  /// \param[in] polDirName Name of directory that contains policy parameters
-  /// \param[in] q_init Initial joint configuration of the robot
+  /// \param[in] model_file Path to the .onnx model file that contains policy parameters
+  /// \param[in] q_ref Reference joint configuration around which to apply the actions
   /// \param[in] action_scale Scaling parameters for actions
   /// \param[in] dt Control time step
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void initialize(std::string polDirName, VectorM q_init, float action_scale, float dt);
+  void initialize(std::basic_string<ORTCHAR_T> model_file, VectorM q_ref, float action_scale, float dt);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -63,14 +63,14 @@ class Interface {
   ///
   /// \param[in] pos Joint positions
   /// \param[in] vel Joint velocities
-  /// \param[in] ori Base orientation (Euler angles)
+  /// \param[in] rpy Base orientation (RPY angles)
   /// \param[in] gyro Base angular velocities
   /// \param[in] cmd Command vector
   /// \param[in] time Elapsed time to compute limb phases
   /// \param[in] hmap Heightmap of the terrain around the robot
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector3 gyro, Vector6 cmd, float time); //, VectorN hmap);
+  void update_observation(VectorM pos, VectorM vel, VectorM tau, Vector3 rpy, Vector3 gyro, Vector6 cmd, float time); //, VectorN hmap);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -104,7 +104,7 @@ class Interface {
   }
 
   // Control policy
-  MLP policy_;
+  OnnxWrapper policy_;
 
   // Observation scaler
   Scaler observationScaler_;
@@ -122,11 +122,11 @@ class Interface {
 
   // Misc
   VectorM pTarget_;
-  VectorM q_init_;
+  VectorM q_ref_;
   Vector3 vel_command_;
   int obsDim_, latentDim_, nJoints_, historyLength_, historySamples_, historyStep_, iter_;
   Eigen::VectorXf obs_, actorObs_, studentObs_, historyObs_, historyTempObs_, latentOut_, actions_;
-  // Eigen::MatrixXf last_actions_, last_dof_pos_, last_dof_vel_;
+  Eigen::MatrixXf last_actions_; // , last_dof_pos_, last_dof_vel_;
   Eigen::Matrix<float, 3, 1> _bodyOri;
   Eigen::Matrix<float, 3, 1> _bodyAngularVel;
   Eigen::Matrix<float, 4, 1> _bodyQuat;
@@ -165,6 +165,7 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
   historyTempObs_ = Eigen::VectorXf::Zero(obsDim * historyLength_);
   latentOut_ = Eigen::VectorXf::Zero(latentDim);
   actions_ = Eigen::VectorXf::Zero(nJoints);
+  last_actions_ = Eigen::VectorXf::Zero(nJoints);
   /*last_actions_ = Eigen::MatrixXf::Zero(nJoints, 6);
   last_dof_pos_ = Eigen::MatrixXf::Zero(nJoints, 6);
   last_dof_vel_ = Eigen::MatrixXf::Zero(nJoints, 6);*/
@@ -174,7 +175,13 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
             << " | historyLength: " << historyLength_ << std::endl;
 }
 
-void Interface::initialize(std::string polDirName, VectorM q_init, float action_scale, float dt) {
+void Interface::initialize(std::basic_string<ORTCHAR_T> model_file, VectorM q_ref, float action_scale, float dt) {
+
+  // Initialize ONNX framework
+  policy_ = OnnxWrapper(model_file);
+  policy_.initialize();
+
+  /*
   policy_.updateParamFromTxt(polDirName + "actor.txt");
   if (useEncoder) {
     encoderModel_.updateParamFromTxt(polDirName + "encoder.txt");
@@ -183,6 +190,7 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
   }
   observationScaler_.updateRunningMeanFromTxt(polDirName + "running_mean.txt");
   observationScaler_.updateRunningVarFromTxt(polDirName + "running_var.txt");
+  */
 
   // Action scale
   _scaleAction = action_scale;
@@ -199,8 +207,8 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
   // Velocity command
   vel_command_ = Vector3(0.0f, 0.0f, 0.0f);
 
-  // Initial position
-  q_init_ = q_init;
+  // Reference position around which to apply the actions
+  q_ref_ = q_ref;
 
   // Initial phases
   phases_freq_.setZero();
@@ -225,19 +233,33 @@ void Interface::initialize(std::string polDirName, VectorM q_init, float action_
 }
 
 VectorM Interface::forward() {
-  if (useEncoder) {
-    latentOut_ = encoderModel_.forward(studentObs_);
-    actorObs_ << historyObs_.head(obsDim_), encoderScaler_.scale(latentOut_);
-  } else {
-    actorObs_ << historyObs_.head(obsDim_);
-  }
+  //if (useEncoder) {
+  //  latentOut_ = encoderModel_.forward(studentObs_);
+
+    /* std::cout << "v_latent    " << latentOut_.transpose() << std::endl;
+    Vector3 A = encoderScaler_.scale(latentOut_);
+    std::cout << "nv_latent    " << A.transpose() << std::endl; */
+
+  //  actorObs_ << historyObs_.head(obsDim_), encoderScaler_.scale(latentOut_);
+  //} else {
+  //  actorObs_ << historyObs_.head(obsDim_);
+  //}
   // std::cout << obsDim_ << std::endl;
   // std::cout << latentDim_ << std::endl;
 
-  actions_ = policy_.forward(actorObs_);
+  // std::cout << "-----" << std::endl;
+  // std::cout << "actorObs_ " << std::endl << actorObs_.transpose() << std::endl;
+  
+  // actions_ = policy_.forward(actorObs_);
+
+  // std::cout << "Actions: " << std::endl << (actions_).transpose() << std::endl;
 
   // Force arm actions to 0
-  actions_.tail(4) *= 0.0;
+  // actions_.tail(4) *= 0.0;
+
+  // std::cout << "================" << std::endl;
+  // std::cout << actions_ << std::endl;
+  // std::cout << "---raw actions: " << std::endl << actions_.transpose() << std::endl;
 
   /*if (iter_ < 5) {
   // std::cout << "---raw hist: " << historyObs_.transpose() << std::endl;
@@ -250,13 +272,19 @@ VectorM Interface::forward() {
   std::cout << "---raw actions: " << std::endl << actions_.transpose() << std::endl;
   }*/
   // std::cout << "Actions: " << std::endl << (_scaleAction * actions_).transpose() << std::endl;
-  // std::cout << "Q Init: " << std::endl << q_init_.transpose() << std::endl;
+  // std::cout << "Q Init: " << std::endl << q_ref_.transpose() << std::endl;
 
   // actions_ << 0.31365,  0.2679 , -0.57505, -0.31365,  0.2679 , -0.57505, 0.31365,  -0.2679 , 0.57505, -0.31365,
   // -0.2679 , 0.57505;
 
+  // Compute policy actions
+  actions_ = policy_.run(obs_); // historyObs_.head(obsDim_));
+
   // Target joint positions based on scaled actions
-  pTarget_ = q_init_ + _scaleAction * actions_;
+  pTarget_ = (0.5 * actions_ + 0.5 * last_actions_) + q_ref_;
+
+  // Remember actions for next step
+  last_actions_ = actions_;
 
   // Log time
   t_end_ = std::chrono::steady_clock::now();
@@ -264,18 +292,20 @@ VectorM Interface::forward() {
   return pTarget_;
 }
 
-void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector3 gyro, Vector6 cmd, float time) {
+void Interface::update_observation(VectorM pos, VectorM vel, VectorM tau, Vector3 rpy, Vector3 gyro, Vector6 cmd, float time) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
   // Projected gravity based on orientation state
-  _bodyQuat = ori;
-  transformBodyQuat();  // this update _bodyOri
-  Vector3 projected_gravity = _bodyOri;
+  // _bodyQuat = ori;
+  // transformBodyQuat();  // this update _bodyOri
+  // Vector3 projected_gravity = _bodyOri;
 
-  Vector3 base_ang_vel = gyro;
+  // std::cout << _bodyQuat.transpose() << std::endl;
+  // std::cout << projected_gravity.transpose() << std::endl;
   
   // Compute limb phase
+  /*
   float rem = std::fmod(phases_(0), 2 * pi_v);
   bool refresh = ((rem + 2 * pi_v * phases_freq_(0) * dt_) > 2 * pi_v) || (phases_freq_(0) == 0.0);
   float norm = std::sqrt(cmd(0) * cmd(0) + cmd(1) * cmd(1) + cmd(5) * cmd(5));
@@ -291,6 +321,7 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
       phases_freq_(1) = 1.25 + 0.5 * (norm - deadzone);
     }
   }
+  */
 
   /*
   const float phase_freq = 1.25;
@@ -299,19 +330,31 @@ void Interface::update_observation(VectorM pos, VectorM vel, Vector4 ori, Vector
   phases += 2 * pi_v * phase_freq * time;
   */
 
-  vel_command_ << cmd(0), cmd(1), cmd(5);
+  // vel_command_ << cmd(0), cmd(1), cmd(5);
+
+  float roll = rpy(0);
+  float pitch = rpy(1);
+  Vector3 base_ang_vel = gyro;
+
   // Filling observation vector
-  obs_ << base_ang_vel * _scaleAngVel,
+  obs_ << roll,
+          pitch,
+          base_ang_vel,
+          pos,
+          vel,
+          tau;
+
+  /*obs_ << base_ang_vel * _scaleAngVel,
           vel_command_.cwiseProduct(_scaleCommand),
           // Eigen::cos(phases_),
           // Eigen::sin(phases_),
           projected_gravity,
           pos * _scaleQ,
           vel * _scaleQd,
-          actions_ * _scaleAction;
-
+          actions_ * _scaleAction;*/
+  
   // Update the history
-  update_history();
+  // update_history();
 
   // Save last actions, joint pos and joint vel
   /* 
@@ -335,12 +378,14 @@ void Interface::update_history() {
   if (historyLength_ > 1) {
     historyObs_.tail(obsDim_ * (historyLength_ - 1)) = historyTempObs_.head(obsDim_ * (historyLength_ - 1));
   }
-  historyObs_.head(obsDim_) = observationScaler_.scale(obs_);
+
+  // Insert new observations into history
+  historyObs_.head(obsDim_) = obs_; // observationScaler_.scale(obs_);
 
   // Fill observation vector for student by extracting the right samples from the observation history
-  for (int i = 0; i < historySamples_; i++) {
-    studentObs_.block(i * obsDim_, 0, obsDim_, 1) = historyObs_.block(i * historyStep_ * obsDim_, 0, obsDim_, 1);
-  }
+  // for (int i = 0; i < historySamples_; i++) {
+  //   studentObs_.block(i * obsDim_, 0, obsDim_, 1) = historyObs_.block(i * historyStep_ * obsDim_, 0, obsDim_, 1);
+  // }
 }
 
 void Interface::transformBodyQuat() {

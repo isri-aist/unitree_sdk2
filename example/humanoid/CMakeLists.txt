@@ -8,4 +8,4 @@ add_executable(h1_low_level_example low_level/humanoid.cpp low_level/Joystick.cp
 target_link_libraries(h1_low_level_example unitree_sdk2 onnxruntime)
 
 add_executable(h1_test_example low_level/debug_humanoid.cpp low_level/Joystick.cpp)
-target_link_libraries(h1_test_example unitree_sdk2 
+target_link_libraries(h1_test_example unitree_sdk2 onnxruntime)

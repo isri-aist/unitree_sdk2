@@ -48,4 +48,6 @@ using Matrix3N = Eigen::Matrix<float, 3, Eigen::Dynamic>;
 using Matrix6N = Eigen::Matrix<float, 6, Eigen::Dynamic>;
 using MatrixN = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>;
 
+using VectorM = Vector10;
+
 #endif  // TYPES_H_INCLUDED
