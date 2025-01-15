@@ -271,7 +271,7 @@ VectorM OnnxWrapper::run(Eigen::VectorXf v) {
            output_tensors[0].IsTensor());
 
     VectorM output = VectorM::Zero();
-    assert(1 == output_shapes_[0] && output.size() == output_shapes_[1]);
+    assert(output.size() == output_shapes_[0]);
 
     // Get pointer to output tensor float values
     float *floatarr = output_tensors.front().GetTensorMutableData<float>();
