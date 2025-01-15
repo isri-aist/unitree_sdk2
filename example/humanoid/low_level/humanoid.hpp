@@ -116,43 +116,21 @@ public:
   ////////////////////////////////////////////////////////////////////////////////////////////////
   void transformBodyQuat(Vector4 _bodyQuat);
 
-  // Prepare the command message and send it to the publisher
-  void LowCommandWriter() {
-    unitree_go::msg::dds_::LowCmd_ dds_low_command{};
-    dds_low_command.head()[0] = 0xFE;
-    dds_low_command.head()[1] = 0xEF;
-    dds_low_command.level_flag() = 0xFF;
-    dds_low_command.gpio() = 0;
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Prepare the command message and send it to the publisher
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void LowCommandWriter();
 
-    const std::shared_ptr<const MotorCommand> mc_tmp_ptr =
-        motor_command_buffer_.GetData();
-    if (mc_tmp_ptr) {
-      for (int i = 0; i < kNumMotors; ++i) {
-        if (IsWeakMotor(i)) {
-          dds_low_command.motor_cmd().at(i).mode() = (0x01);
-        } else {
-          dds_low_command.motor_cmd().at(i).mode() = (0x0A);
-        }
-        dds_low_command.motor_cmd().at(i).tau() = mc_tmp_ptr->tau_ff.at(i);
-        dds_low_command.motor_cmd().at(i).q() = mc_tmp_ptr->q_ref.at(i);
-        dds_low_command.motor_cmd().at(i).dq() = mc_tmp_ptr->dq_ref.at(i);
-        dds_low_command.motor_cmd().at(i).kp() = mc_tmp_ptr->kp.at(i);
-        dds_low_command.motor_cmd().at(i).kd() = mc_tmp_ptr->kd.at(i);
-      }
-      dds_low_command.crc() = Crc32Core((uint32_t *)&dds_low_command,
-                                        (sizeof(dds_low_command) >> 2) - 1);
-      lowcmd_publisher_->Write(dds_low_command);
-    }
-  }
-
-  // Update motor and base states using received sensor message
-  void LowStateHandler(const void *message) {
-    unitree_go::msg::dds_::LowState_ low_state =
-        *(unitree_go::msg::dds_::LowState_ *)message;
-
-    RecordMotorState(low_state);
-    RecordBaseState(low_state);
-  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Update motor and base states using received sensor message
+  ///
+  /// \param[in] message State message containing information from the sensors
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void LowStateHandler(const void *message);
 
   // Take decisions for the next commands and send them to the motor command
   // buffer
@@ -510,6 +488,42 @@ void HumanoidExample::endWaiting() {
 ////
 // READ / WRITE MESSAGES
 ////
+
+void LowCommandWriter() {
+  unitree_go::msg::dds_::LowCmd_ dds_low_command{};
+  dds_low_command.head()[0] = 0xFE;
+  dds_low_command.head()[1] = 0xEF;
+  dds_low_command.level_flag() = 0xFF;
+  dds_low_command.gpio() = 0;
+
+  const std::shared_ptr<const MotorCommand> mc_tmp_ptr =
+      motor_command_buffer_.GetData();
+  if (mc_tmp_ptr) {
+    for (int i = 0; i < kNumMotors; ++i) {
+      if (IsWeakMotor(i)) {
+        dds_low_command.motor_cmd().at(i).mode() = (0x01);
+      } else {
+        dds_low_command.motor_cmd().at(i).mode() = (0x0A);
+      }
+      dds_low_command.motor_cmd().at(i).tau() = mc_tmp_ptr->tau_ff.at(i);
+      dds_low_command.motor_cmd().at(i).q() = mc_tmp_ptr->q_ref.at(i);
+      dds_low_command.motor_cmd().at(i).dq() = mc_tmp_ptr->dq_ref.at(i);
+      dds_low_command.motor_cmd().at(i).kp() = mc_tmp_ptr->kp.at(i);
+      dds_low_command.motor_cmd().at(i).kd() = mc_tmp_ptr->kd.at(i);
+    }
+    dds_low_command.crc() = Crc32Core((uint32_t *)&dds_low_command,
+                                      (sizeof(dds_low_command) >> 2) - 1);
+    lowcmd_publisher_->Write(dds_low_command);
+  }
+}
+
+void HumanoidExample::LowStateHandler(const void *message) {
+  unitree_go::msg::dds_::LowState_ low_state =
+      *(unitree_go::msg::dds_::LowState_ *)message;
+
+  RecordMotorState(low_state);
+  RecordBaseState(low_state);
+}
 
 void HumanoidExample::RecordMotorState(
     const unitree_go::msg::dds_::LowState_ &msg) {
