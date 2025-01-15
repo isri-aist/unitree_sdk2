@@ -30,13 +30,13 @@ int main(int argc, ORTCHAR_T* argv[]) {
   wrapper.initialize();
 
   // Run one inference
-  VectorM A = wrapper.run(Eigen::VectorXf::Zero(28 * 28));
+  VectorM A = wrapper.run(Eigen::VectorXf::Ones(35));
   std::cout << "Output:" << std::endl << A.transpose() << std::endl;
 
   // Time the average computation time for inference
   auto t1 = high_resolution_clock::now();
   for(int i = 0; i < 100; i++) {
-    wrapper.run(Eigen::VectorXf::Zero(28 * 28));
+    wrapper.run(Eigen::VectorXf::Zero(35));
   }
   auto t2 = high_resolution_clock::now();
 
