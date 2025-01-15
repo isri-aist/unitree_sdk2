@@ -28,7 +28,7 @@ public:
   /// \brief Empty constructor
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  OnnxWrapper() : session_(nullptr){};
+  OnnxWrapper() {};
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -44,7 +44,7 @@ public:
   /// \brief Destructor.
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  ~OnnxWrapper();
+  ~OnnxWrapper() {};
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -93,7 +93,7 @@ public:
   VectorM run(Eigen::VectorXf v);
 
 private:
-  Ort::Session *session_; // ONNX Runtime session
+  std::unique_ptr<Ort::Session> session_; // ONNX Runtime session
 
   std::vector<std::int64_t> input_shapes_; // Shape of the inputs of the network
   std::vector<std::int64_t>
@@ -112,12 +112,7 @@ OnnxWrapper::OnnxWrapper(std::basic_string<ORTCHAR_T> model_file) {
   // onnxruntime setup
   Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "example-model-explorer");
   Ort::SessionOptions session_options;
-  session_ = new Ort::Session(env, model_file.c_str(), session_options);
-}
-
-OnnxWrapper::~OnnxWrapper() {
-  delete session_;
-  session_ = nullptr;
+  session_ = std::make_unique<Ort::Session>(env, model_file.c_str(), session_options);
 }
 
 std::string OnnxWrapper::print_shape(const std::vector<std::int64_t> &v) {

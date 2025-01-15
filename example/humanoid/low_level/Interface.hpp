@@ -35,7 +35,7 @@ class Interface {
   /// \brief Destructor.
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  ~Interface();
+  ~Interface() {};
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -103,7 +103,7 @@ class Interface {
   }
 
   // Control policy
-  OnnxWrapper *policy_;
+  std::unique_ptr<OnnxWrapper> policy_;
 
   // Observation scaler
    //Scaler observationScaler_;
@@ -152,7 +152,6 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
   }
   observationScaler_ = Scaler(obsDim);
   */
-  policy_ = nullptr;
   obsDim_ = obsDim;
   latentDim_ = latentDim;
   nJoints_ = nJoints;
@@ -177,15 +176,10 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
             << " | historyLength: " << historyLength_ << std::endl;
 }
 
-Interface::~Interface() {
-  delete policy_;
-  policy_ = nullptr;
-}
-
 void Interface::initialize(std::basic_string<ORTCHAR_T> model_file, VectorM q_ref, float action_scale, float dt) {
 
   // Initialize ONNX framework
-  policy_ = new OnnxWrapper(model_file);
+  policy_ = std::make_unique<OnnxWrapper>(model_file);
   policy_->initialize();
 
   /*

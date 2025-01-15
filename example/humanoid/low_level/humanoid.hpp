@@ -40,7 +40,7 @@ void waiting(HumanoidExample *HE);
 
 class HumanoidExample {
 public:
-  HumanoidExample(const std::string &networkInterface = "")
+  HumanoidExample(const std::string &networkInterface = "", const std::string &model_file = "")
       : mlpInterface_(35, 0, 10, 1, 1) {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
@@ -79,12 +79,7 @@ public:
     }
 
     // Create link with MLP
-    // "/home/paleziart/git/policies/H1Terrain_08-13_14-34-35/nn/",
-    // "/home/paleziart/git/policies/H1Terrain_08-14_16-30-59/nn/"
-
-    mlpInterface_.initialize(
-        "nn.onnx",
-        q_init_.head(10), 0.5, control_dt_);
+    mlpInterface_.initialize(model_file, q_init_.head(10), 0.5, control_dt_);
 
     // Initialize tables for console display
     UpdateTables(true);
