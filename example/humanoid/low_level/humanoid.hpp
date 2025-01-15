@@ -238,9 +238,17 @@ public:
             << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
             << std::endl;*/
 
-        VectorM policy_cmd = mlpInterface_.forward();
-        // policy_cmd.tail(4) *= 0.0;
-        VectorM network_cmd = policy_cmd; // q_init_.head(10);
+        // Interpolation coefficient to slowly switch to full policy output
+        float alpha = 1.0;
+        if (time_run_ < interp_duration_) {
+          alpha = time_run_ / interp_duration_;
+        }
+
+        // Inference to get position targets from the policy
+        policy_out_ = mlpInterface_.forward();
+
+        // VectorM network_cmd = q_init_.head(10) * (1 - alpha) + policy_out_ * alpha;
+        VectorM network_cmd = q_init_.head(10);
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
           // Discard arm commands for now
@@ -447,6 +455,8 @@ private:
 
   Vector6 cmd_ = Vector6::Zero();
 
+  VectorM policy_out_ = VectorM::Zero();
+
   const Matrix4 quatPermut{{0, 1, 0, 0},
                            {0, 0, 1, 0},
                            {0, 0, 0, 1},
@@ -455,6 +465,7 @@ private:
   float time_ = 0.f;
   float time_run_ = 0.f;
   const float init_duration_ = 8.f;
+  const float interp_duration_ = 1.f
 
   float report_dt_ = 0.1f;
 
@@ -549,6 +560,7 @@ void HumanoidExample::LogAll() {
     logi("{}", *bs_tmp_ptr);
   }
   logi("{}", "tau_des," + arrayToStringView(tau_des_));
+  logi("{}", "policy_out," + arrayToStringView(policy_out_));
 }
 
 ////
