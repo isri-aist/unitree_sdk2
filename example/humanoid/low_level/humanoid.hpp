@@ -14,10 +14,10 @@
 #include <unitree/idl/go2/LowCmd_.hpp>
 #include <unitree/idl/go2/LowState_.hpp>
 
-#include "Joystick.hpp"
-#include "base_state.h"
 #include "Interface.hpp"
+#include "Joystick.hpp"
 #include "Types.h"
+#include "base_state.h"
 #include "data_buffer.hpp"
 #include "lib/fort.c"
 #include "lib/fort.hpp"
@@ -40,7 +40,8 @@ void waiting(HumanoidExample *HE);
 
 class HumanoidExample {
 public:
-  HumanoidExample(const std::string &networkInterface = "", const std::string &model_file = "")
+  HumanoidExample(const std::string &networkInterface = "",
+                  const std::string &model_file = "")
       : mlpInterface_(35, 0, 10, 1, 1) {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
@@ -91,19 +92,29 @@ public:
     fmtlog::startPollingThread(100000000);
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Default destructor
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
   ~HumanoidExample() = default;
 
-  // Get the current date in local time
-  char *getCurrentDateTime() {
-    std::time_t t = std::time(nullptr);
-    std::tm tm = *std::localtime(&t);
-    std::stringstream ss;
-    ss << std::put_time(&tm, "%Y-%m-%d_%H-%M-%S.txt");
-    char *result = new char[ss.str().length() + 1];
-    std::strcpy(result, ss.str().c_str());
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Get the current date in local time
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  char *getCurrentDateTime();
 
-    return result;
-  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Transform quat orientation into projected gravity vector
+  ///
+  /// \param[in] _bodyQuat The orientation expressed as a (x, y, z, w)
+  /// quaternion
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void transformBodyQuat(Vector4 _bodyQuat);
 
   // Prepare the command message and send it to the publisher
   void LowCommandWriter() {
@@ -141,20 +152,6 @@ public:
 
     RecordMotorState(low_state);
     RecordBaseState(low_state);
-  }
-
-  void transformBodyQuat(Vector4 _bodyQuat) {
-    Vector3 _gravityVec, _qa, _qb, _qc, _qvec, _bodyOri;
-    float q_w = 0.0;
-    _gravityVec << 0.0, 0.0, -1.;
-
-    // Body QUAT and gravity vector of 0 , 0, -1
-    q_w = _bodyQuat[3];
-    _qvec = _bodyQuat.head(3);
-    _qa = _gravityVec * (2. * q_w * q_w - 1.);
-    _qb = _qvec.cross(_gravityVec) * q_w * 2.0;
-    _qc = _qvec * (_qvec.transpose() * _gravityVec) * 2.0;
-    _bodyOri = _qa - _qb + _qc;
   }
 
   // Take decisions for the next commands and send them to the motor command
@@ -224,12 +221,14 @@ public:
         /*
         std::cout << "Q" << std::endl << q_obs.transpose() << std::endl;
         std::cout << "dQ" << std::endl << dq_obs.transpose() << std::endl;
-        std::cout << "ORI" << std::endl << (quatPermut * ori).transpose() << std::endl;
-        std::cout << "GYRO" << std::endl << gyro.transpose() << std::endl;
-        std::cout << "CMD" << std::endl << cmd_.transpose() << std::endl; 
+        std::cout << "ORI" << std::endl << (quatPermut * ori).transpose() <<
+        std::endl; std::cout << "GYRO" << std::endl << gyro.transpose() <<
+        std::endl; std::cout << "CMD" << std::endl << cmd_.transpose() <<
+        std::endl;
         */
-        
-        mlpInterface_.update_observation(q_obs, dq_obs, tau_obs, rpy,  // quatPermut * ori, gyro,
+
+        mlpInterface_.update_observation(q_obs, dq_obs, tau_obs,
+                                         rpy, // quatPermut * ori, gyro,
                                          gyro, cmd_, time_run_);
 
         // std::cout << std::setprecision(4) <<
@@ -318,296 +317,62 @@ public:
     }
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Basic print of sensor data to the console
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void ReportSensors();
 
-  Vector3 transformoBodyQuat(Vector4 o) {
-    // Body QUAT and gravity vector of 0 , 0, -1
-    Eigen::Vector3f _gravityVec;
-    _gravityVec << 0.0, 0.0, -1.;
-
-    float q_w = o[3];
-    Eigen::Vector3f _qvec = o.head(3);
-    Eigen::Vector3f _qa = _gravityVec * (2. * q_w * q_w - 1.);
-    Eigen::Vector3f _qb = _qvec.cross(_gravityVec) * q_w * 2.0;
-    Eigen::Vector3f _qc = _qvec * (_qvec.transpose() * _gravityVec) * 2.0;
-    return _qa - _qb + _qc;
-  }
-
-  // Print sensor data to the terminal
-  void ReportSensors() {
-    const std::shared_ptr<const BaseState> bs_tmp_ptr =
-        base_state_buffer_.GetData();
-    const std::shared_ptr<const MotorState> ms_tmp_ptr =
-        motor_state_buffer_.GetData();
-    if (bs_tmp_ptr) {
-      // Roll Pitch Yaw orientation
-      std::cout << std::setprecision(4) << "rpy: [" << bs_tmp_ptr->rpy.at(0)
-                << ", " << bs_tmp_ptr->rpy.at(1) << ", "
-                << bs_tmp_ptr->rpy.at(2) << "]" << std::endl;
-      // Gyroscope
-      std::cout << std::setprecision(4) << "gyro: [" << bs_tmp_ptr->omega.at(0)
-                << ", " << bs_tmp_ptr->omega.at(1) << ", "
-                << bs_tmp_ptr->omega.at(2) << "]" << std::endl;
-      // Accelerometer
-      std::cout << std::setprecision(4) << "acc: [" << bs_tmp_ptr->acc.at(0)
-                << ", " << bs_tmp_ptr->acc.at(1) << ", "
-                << bs_tmp_ptr->acc.at(2) << "]" << std::endl;
-    }
-    if (ms_tmp_ptr) {
-      // Joint positions
-      std::cout << "mot_pos: [";
-      for (int i = 0; i < kNumMotors; ++i) {
-        std::cout << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]) << ", ";
-      }
-      std::cout << "]" << std::endl;
-
-      // Joint velocities
-      std::cout << "mot_vel: [";
-      for (int i = 0; i < kNumMotors; ++i) {
-        std::cout << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]) << ", ";
-      }
-      std::cout << "]" << std::endl;
-    }
-  }
-
-  // Launch controller once Enter is pressed
-  void endWaiting() {
-    if (status_ == STATUS_WAITING_AIR) {
-      status_ = STATUS_WAITING_GRD;
-      std::thread wait_thread(waiting, this);
-      wait_thread.detach();
-    } else if (status_ == STATUS_WAITING_GRD) {
-      time_run_ = -control_dt_;
-      status_ = STATUS_RUN;
-    }
-  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Launch controller once Enter is pressed
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void endWaiting();
 
 private:
-  void UpdateTables(bool init = false) {
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Refresh the quantities in the tables displayed in the console
+  ///
+  /// \param[in] init Initialize style and header of tables
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void UpdateTables(bool init = false);
 
-    // Clear the console
-    std::cout << u8"\033[2J";
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Log all monitored quantities for the current time step
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void LogAll();
 
-    if (init) {
-      // Set tables border style
-      table_IMU_.set_border_style(FT_NICE_STYLE);
-      table_legs_.set_border_style(FT_NICE_STYLE);
-      table_arms_.set_border_style(FT_NICE_STYLE);
-      table_misc_.set_border_style(FT_NICE_STYLE);
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Read and record information about low level motor states (pos, vel,
+  /// torques)
+  ///
+  /// \param[in] msg Low-state message containing information about the motors
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void RecordMotorState(const unitree_go::msg::dds_::LowState_ &msg);
 
-      // Initialize headers
-      table_IMU_.set_cur_cell(0, 0);
-      table_legs_.set_cur_cell(0, 0);
-      table_arms_.set_cur_cell(0, 0);
-      table_misc_.set_cur_cell(0, 0);
-      table_IMU_ << fort::header << "" << "X" << "Y" << "Z" << fort::endr;
-      table_legs_ << fort::header << "" << "L Yaw" << "L Roll" << "L Pitch"
-                    << "L Knee" << "L Ank";
-      table_legs_ << "R Yaw" << "R Roll" << "R Pitch" << "R Knee" << "R Ank"
-                    << fort::endr;
-      table_arms_ << fort::header << "" << "L Pitch" << "L Roll" << "L Yaw"
-                    << "L Elbow";
-      table_arms_ << "R Pitch" << "R Roll" << "R Yaw" << "R Elbow"
-                    << fort::endr;
-      table_misc_ << fort::header << "" << "VX" << "VY" << "WZ" << fort::endr;
-    }
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Read and record information about low level motor states (pos, vel,
+  /// torques)
+  ///
+  /// \param[in] msg Low-state message containing information about the motors
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void RecordBaseState(const unitree_go::msg::dds_::LowState_ &msg);
 
-    // Fill tables with data
-    const std::shared_ptr<const BaseState> bs_tmp_ptr =
-        base_state_buffer_.GetData();
-    const std::shared_ptr<const MotorState> ms_tmp_ptr =
-        motor_state_buffer_.GetData();
-
-    // Set current cell to start of second row
-    table_IMU_.set_cur_cell(1, 0);
-    table_legs_.set_cur_cell(1, 0);
-    table_arms_.set_cur_cell(1, 0);
-    table_misc_.set_cur_cell(1, 0);
-
-    // Fill IMU data
-    if (bs_tmp_ptr) {
-      table_IMU_ << "RPY";
-      for (int i = 0; i < 3; ++i) {
-        table_IMU_ << std::fixed << std::setprecision(4)
-                   << bs_tmp_ptr->rpy.at(i);
-      }
-      table_IMU_ << fort::endr << fort::separator << "Gyro";
-      for (int i = 0; i < 3; ++i) {
-        table_IMU_ << std::fixed << std::setprecision(4)
-                   << bs_tmp_ptr->omega.at(i);
-      }
-      table_IMU_ << fort::endr << fort::separator << "Acc";
-      for (int i = 0; i < 3; ++i) {
-        table_IMU_ << std::fixed << std::setprecision(4)
-                   << bs_tmp_ptr->acc.at(i);
-      }
-    }
-
-    // Fill joint data
-    if (ms_tmp_ptr) {
-      table_legs_ << "Pos";
-      for (int i = 0; i < 10; ++i) {
-        table_legs_ << std::fixed << std::setprecision(4)
-                      << ms_tmp_ptr->q.at(moti[i]);
-      }
-      table_legs_ << fort::endr << fort::separator << "Vel";
-      for (int i = 0; i < 10; ++i) {
-        table_legs_ << std::fixed << std::setprecision(4)
-                      << ms_tmp_ptr->dq.at(moti[i]);
-      }
-      table_legs_ << fort::endr << fort::separator << "Torques";
-      for (int i = 0; i < 10; ++i) {
-        table_legs_ << std::fixed << std::setprecision(4)
-                      << ms_tmp_ptr->tau.at(moti[i]); // tau_des_[i];
-      }
-      table_legs_ << fort::endr;
-
-      table_arms_ << "Pos";
-      for (int i = 11; i < 19; ++i) {
-        table_arms_ << std::fixed << std::setprecision(4)
-                      << ms_tmp_ptr->q.at(moti[i]);
-      }
-      table_arms_ << fort::endr << fort::separator << "Vel";
-      for (int i = 11; i < 19; ++i) {
-        table_arms_ << std::fixed << std::setprecision(4)
-                      << ms_tmp_ptr->dq.at(moti[i]);
-      }
-      table_arms_ << fort::endr << fort::separator << "Torques";
-      for (int i = 11; i < 19; ++i) {
-        table_arms_ << std::fixed << std::setprecision(4)
-                      << ms_tmp_ptr->tau.at(moti[i]); // tau_des_[i];
-      }
-      table_arms_ << fort::endr;
-
-    }
-
-    table_misc_ << "Vel cmd" << std::fixed << std::setprecision(4) << cmd_(0)
-                << cmd_(1) << cmd_(5) << fort::endr;
-
-    if (init) {
-      // Set text style
-      table_IMU_.row(0).set_cell_content_text_style(fort::text_style::bold);
-      table_IMU_.column(0).set_cell_content_text_style(fort::text_style::bold);
-      table_legs_.column(0).set_cell_content_text_style(
-          fort::text_style::bold);
-      table_arms_.column(0).set_cell_content_text_style(
-          fort::text_style::bold);
-      table_misc_.row(0).set_cell_content_text_style(fort::text_style::bold);
-      table_misc_.column(0).set_cell_content_text_style(fort::text_style::bold);
-
-      // Set alignment
-      table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
-      for (int i = 1; i < 4; ++i) {
-        table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
-        table_IMU_.column(i).set_cell_min_width(9);
-      }
-      table_IMU_[0][1].set_cell_text_align(fort::text_align::center);
-      table_IMU_[0][2].set_cell_text_align(fort::text_align::center);
-      table_IMU_[0][3].set_cell_text_align(fort::text_align::center);
-
-      table_legs_.column(0).set_cell_text_align(fort::text_align::center);
-      for (int i = 1; i < 11; ++i) {
-        table_legs_.column(i).set_cell_text_align(fort::text_align::right);
-        table_legs_.column(i).set_cell_min_width(9);
-      }
-
-      table_arms_.column(0).set_cell_text_align(fort::text_align::center);
-      for (int i = 1; i < 11; ++i) {
-        table_arms_.column(i).set_cell_text_align(fort::text_align::right);
-        table_arms_.column(i).set_cell_min_width(9);
-      }
-
-      table_misc_.column(0).set_cell_text_align(fort::text_align::center);
-      for (int i = 1; i < 4; ++i) {
-        table_misc_.column(i).set_cell_text_align(fort::text_align::right);
-        table_misc_.column(i).set_cell_min_width(9);
-      }
-      table_misc_[0][1].set_cell_text_align(fort::text_align::center);
-      table_misc_[0][2].set_cell_text_align(fort::text_align::center);
-      table_misc_[0][3].set_cell_text_align(fort::text_align::center);
-    }
-
-    switch (status_) {
-    case STATUS_INIT:
-      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-      std::cout << "    ┃      Initialization      ┃" << std::endl;
-      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-      break;
-    case STATUS_WAITING_AIR:
-      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-      std::cout << "    ┃    Waiting in the air    ┃" << std::endl;
-      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-      break;
-    case STATUS_WAITING_GRD:
-      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-      std::cout << "    ┃   Waiting on the ground  ┃" << std::endl;
-      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-      break;
-    case STATUS_RUN:
-      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-      std::cout << "    ┃    Running Controller    ┃" << std::endl;
-      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-      break;
-    case STATUS_DAMPING:
-      std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-      std::cout << "    ┃    Emergency Damping!    ┃" << std::endl;
-      std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-      break;
-    }
-    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-    std::cout << "    ┃    Sensor Data    ┃" << std::endl;
-    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-    std::cout << table_IMU_.to_string() << std::endl;
-    std::cout << table_legs_.to_string() << std::endl;
-    std::cout << table_arms_.to_string() << std::endl;
-    std::cout << table_misc_.to_string() << std::endl;
-    std::cout << "Time: " << time_ << std::endl;
-  }
-
-  void LogAll() {
-
-    // Retrieve and store data
-    const std::shared_ptr<const MotorState> ms_tmp_ptr =
-        motor_state_buffer_.GetData();
-    const std::shared_ptr<const MotorCommand> mc_tmp_ptr =
-        motor_command_buffer_.GetData();
-    const std::shared_ptr<const BaseState> bs_tmp_ptr =
-        base_state_buffer_.GetData();
-
-    // Log all monitored variables
-    logi("time,{}", time_);
-    if (ms_tmp_ptr) {
-      logi("{}", *ms_tmp_ptr);
-    }
-    if (mc_tmp_ptr) {
-      logi("{}", *mc_tmp_ptr);
-    }
-    if (bs_tmp_ptr) {
-      logi("{}", *bs_tmp_ptr);
-    }
-    logi("{}", "tau_des," + arrayToStringView(tau_des_));
-  }
-
-  void RecordMotorState(const unitree_go::msg::dds_::LowState_ &msg) {
-    MotorState ms_tmp;
-    for (int i = 0; i < kNumMotors; ++i) {
-      ms_tmp.q.at(i) = msg.motor_state()[i].q();
-      ms_tmp.dq.at(i) = msg.motor_state()[i].dq();
-      ms_tmp.tau.at(i) = msg.motor_state()[i].tau_est();
-    }
-
-    motor_state_buffer_.SetData(ms_tmp);
-  }
-
-  void RecordBaseState(const unitree_go::msg::dds_::LowState_ &msg) {
-    BaseState bs_tmp;
-    bs_tmp.omega = msg.imu_state().gyroscope();
-    bs_tmp.quat = msg.imu_state().quaternion();
-    bs_tmp.rpy = msg.imu_state().rpy();
-    bs_tmp.acc = msg.imu_state().accelerometer();
-
-    base_state_buffer_.SetData(bs_tmp);
-  }
-
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Check if a motor index corresponds to a "weak" motor
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
   inline bool IsWeakMotor(int motor_index) {
     return motor_index == JointIndex::kLeftAnkle ||
            motor_index == JointIndex::kRightAnkle ||
@@ -640,8 +405,8 @@ private:
 
   // Default configuration
   const Vector20 q_init_{
-      0.0, 0.0, -0.4, 0.8, -0.4, 0.0, 0.0, -0.4, 0.8, -0.4, // Legs
-      0.0, 0.4, 0.0,  0.0, -0.4, 0.4, 0.0, 0.0, -0.4,       // Torso and arms
+      0.0, 0.0, -0.4, 0.8, -0.4, 0.0, 0.0, -0.4, 0.8,  -0.4, // Legs
+      0.0, 0.4, 0.0,  0.0, -0.4, 0.4, 0.0, 0.0,  -0.4,       // Torso and arms
       0.0};                                                  // Unused joint
   const Vector20 q_lim_lower{-0.43, -0.43, -3.14, -0.26, -0.87,
                              -0.43, -0.43, -3.14, -0.26, -0.87, // Legs
@@ -660,10 +425,9 @@ private:
                100.0, 100.0, 100.0, 100.0, // Torso and arms
                0.0};                       // Unused joint
 
-  Vector20 kd_{
-      5.0, 5.0, 5.0, 5.0, 2.0, 5.0, 5.0, 5.0, 5.0, 2.0, // Legs
-      6.0,  2.0,  2.0,  2.0, 2.0, 2.0,  2.0,  2.0,  2.0,      // Torso and arms
-      0.0};                                                   // Unused joint
+  Vector20 kd_{5.0, 5.0, 5.0, 5.0, 2.0, 5.0, 5.0, 5.0, 5.0, 2.0, // Legs
+               6.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, // Torso and arms
+               0.0};                                        // Unused joint
 
   Vector20 kp_wait_{1500.0, 1500.0, 1500.0, 1500.0, 1500.0,
                     1500.0, 1500.0, 1500.0, 1500.0, 1500.0, // Legs
@@ -709,10 +473,342 @@ private:
   fort::char_table table_misc_;
 };
 
+////
+// WAITING BEFORE LAUNCHING CONTROLLER
+////
+
 // Wait for Enter key press
 void waiting(HumanoidExample *HE) {
   using namespace std::chrono_literals;
   std::this_thread::sleep_for(1000ms);
   std::cin.get();
   HE->endWaiting();
+}
+
+void HumanoidExample::endWaiting() {
+  if (status_ == STATUS_WAITING_AIR) {
+    status_ = STATUS_WAITING_GRD;
+    std::thread wait_thread(waiting, this);
+    wait_thread.detach();
+  } else if (status_ == STATUS_WAITING_GRD) {
+    time_run_ = -control_dt_;
+    status_ = STATUS_RUN;
+  }
+}
+
+////
+// READ / WRITE MESSAGES
+////
+
+void HumanoidExample::RecordMotorState(
+    const unitree_go::msg::dds_::LowState_ &msg) {
+  MotorState ms_tmp;
+  for (int i = 0; i < kNumMotors; ++i) {
+    ms_tmp.q.at(i) = msg.motor_state()[i].q();
+    ms_tmp.dq.at(i) = msg.motor_state()[i].dq();
+    ms_tmp.tau.at(i) = msg.motor_state()[i].tau_est();
+  }
+
+  motor_state_buffer_.SetData(ms_tmp);
+}
+
+void HumanoidExample::RecordBaseState(
+    const unitree_go::msg::dds_::LowState_ &msg) {
+  BaseState bs_tmp;
+  bs_tmp.omega = msg.imu_state().gyroscope();
+  bs_tmp.quat = msg.imu_state().quaternion();
+  bs_tmp.rpy = msg.imu_state().rpy();
+  bs_tmp.acc = msg.imu_state().accelerometer();
+
+  base_state_buffer_.SetData(bs_tmp);
+}
+
+////
+// LOGGING DURING EXPERIMENT
+////
+
+void HumanoidExample::LogAll() {
+
+  // Retrieve and store data
+  const std::shared_ptr<const MotorState> ms_tmp_ptr =
+      motor_state_buffer_.GetData();
+  const std::shared_ptr<const MotorCommand> mc_tmp_ptr =
+      motor_command_buffer_.GetData();
+  const std::shared_ptr<const BaseState> bs_tmp_ptr =
+      base_state_buffer_.GetData();
+
+  // Log all monitored variables
+  logi("time,{}", time_);
+  if (ms_tmp_ptr) {
+    logi("{}", *ms_tmp_ptr);
+  }
+  if (mc_tmp_ptr) {
+    logi("{}", *mc_tmp_ptr);
+  }
+  if (bs_tmp_ptr) {
+    logi("{}", *bs_tmp_ptr);
+  }
+  logi("{}", "tau_des," + arrayToStringView(tau_des_));
+}
+
+////
+// DISPLAY IN CONSOLE
+////
+
+void HumanoidExample::ReportSensors() {
+  const std::shared_ptr<const BaseState> bs_tmp_ptr =
+      base_state_buffer_.GetData();
+  const std::shared_ptr<const MotorState> ms_tmp_ptr =
+      motor_state_buffer_.GetData();
+  if (bs_tmp_ptr) {
+    // Roll Pitch Yaw orientation
+    std::cout << std::setprecision(4) << "rpy: [" << bs_tmp_ptr->rpy.at(0)
+              << ", " << bs_tmp_ptr->rpy.at(1) << ", " << bs_tmp_ptr->rpy.at(2)
+              << "]" << std::endl;
+    // Gyroscope
+    std::cout << std::setprecision(4) << "gyro: [" << bs_tmp_ptr->omega.at(0)
+              << ", " << bs_tmp_ptr->omega.at(1) << ", "
+              << bs_tmp_ptr->omega.at(2) << "]" << std::endl;
+    // Accelerometer
+    std::cout << std::setprecision(4) << "acc: [" << bs_tmp_ptr->acc.at(0)
+              << ", " << bs_tmp_ptr->acc.at(1) << ", " << bs_tmp_ptr->acc.at(2)
+              << "]" << std::endl;
+  }
+  if (ms_tmp_ptr) {
+    // Joint positions
+    std::cout << "mot_pos: [";
+    for (int i = 0; i < kNumMotors; ++i) {
+      std::cout << std::setprecision(4) << ms_tmp_ptr->q.at(moti[i]) << ", ";
+    }
+    std::cout << "]" << std::endl;
+
+    // Joint velocities
+    std::cout << "mot_vel: [";
+    for (int i = 0; i < kNumMotors; ++i) {
+      std::cout << std::setprecision(4) << ms_tmp_ptr->dq.at(moti[i]) << ", ";
+    }
+    std::cout << "]" << std::endl;
+  }
+}
+
+void HumanoidExample::UpdateTables(bool init) {
+  // Clear the console
+  std::cout << u8"\033[2J";
+
+  if (init) {
+    // Set tables border style
+    table_IMU_.set_border_style(FT_NICE_STYLE);
+    table_legs_.set_border_style(FT_NICE_STYLE);
+    table_arms_.set_border_style(FT_NICE_STYLE);
+    table_misc_.set_border_style(FT_NICE_STYLE);
+
+    // Initialize headers
+    table_IMU_.set_cur_cell(0, 0);
+    table_legs_.set_cur_cell(0, 0);
+    table_arms_.set_cur_cell(0, 0);
+    table_misc_.set_cur_cell(0, 0);
+    table_IMU_ << fort::header << ""
+               << "X"
+               << "Y"
+               << "Z" << fort::endr;
+    table_legs_ << fort::header << ""
+                << "L Yaw"
+                << "L Roll"
+                << "L Pitch"
+                << "L Knee"
+                << "L Ank";
+    table_legs_ << "R Yaw"
+                << "R Roll"
+                << "R Pitch"
+                << "R Knee"
+                << "R Ank" << fort::endr;
+    table_arms_ << fort::header << ""
+                << "L Pitch"
+                << "L Roll"
+                << "L Yaw"
+                << "L Elbow";
+    table_arms_ << "R Pitch"
+                << "R Roll"
+                << "R Yaw"
+                << "R Elbow" << fort::endr;
+    table_misc_ << fort::header << ""
+                << "VX"
+                << "VY"
+                << "WZ" << fort::endr;
+  }
+
+  // Fill tables with data
+  const std::shared_ptr<const BaseState> bs_tmp_ptr =
+      base_state_buffer_.GetData();
+  const std::shared_ptr<const MotorState> ms_tmp_ptr =
+      motor_state_buffer_.GetData();
+
+  // Set current cell to start of second row
+  table_IMU_.set_cur_cell(1, 0);
+  table_legs_.set_cur_cell(1, 0);
+  table_arms_.set_cur_cell(1, 0);
+  table_misc_.set_cur_cell(1, 0);
+
+  // Fill IMU data
+  if (bs_tmp_ptr) {
+    table_IMU_ << "RPY";
+    for (int i = 0; i < 3; ++i) {
+      table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->rpy.at(i);
+    }
+    table_IMU_ << fort::endr << fort::separator << "Gyro";
+    for (int i = 0; i < 3; ++i) {
+      table_IMU_ << std::fixed << std::setprecision(4)
+                 << bs_tmp_ptr->omega.at(i);
+    }
+    table_IMU_ << fort::endr << fort::separator << "Acc";
+    for (int i = 0; i < 3; ++i) {
+      table_IMU_ << std::fixed << std::setprecision(4) << bs_tmp_ptr->acc.at(i);
+    }
+  }
+
+  // Fill joint data
+  if (ms_tmp_ptr) {
+    table_legs_ << "Pos";
+    for (int i = 0; i < 10; ++i) {
+      table_legs_ << std::fixed << std::setprecision(4)
+                  << ms_tmp_ptr->q.at(moti[i]);
+    }
+    table_legs_ << fort::endr << fort::separator << "Vel";
+    for (int i = 0; i < 10; ++i) {
+      table_legs_ << std::fixed << std::setprecision(4)
+                  << ms_tmp_ptr->dq.at(moti[i]);
+    }
+    table_legs_ << fort::endr << fort::separator << "Torques";
+    for (int i = 0; i < 10; ++i) {
+      table_legs_ << std::fixed << std::setprecision(4)
+                  << ms_tmp_ptr->tau.at(moti[i]); // tau_des_[i];
+    }
+    table_legs_ << fort::endr;
+
+    table_arms_ << "Pos";
+    for (int i = 11; i < 19; ++i) {
+      table_arms_ << std::fixed << std::setprecision(4)
+                  << ms_tmp_ptr->q.at(moti[i]);
+    }
+    table_arms_ << fort::endr << fort::separator << "Vel";
+    for (int i = 11; i < 19; ++i) {
+      table_arms_ << std::fixed << std::setprecision(4)
+                  << ms_tmp_ptr->dq.at(moti[i]);
+    }
+    table_arms_ << fort::endr << fort::separator << "Torques";
+    for (int i = 11; i < 19; ++i) {
+      table_arms_ << std::fixed << std::setprecision(4)
+                  << ms_tmp_ptr->tau.at(moti[i]); // tau_des_[i];
+    }
+    table_arms_ << fort::endr;
+  }
+
+  table_misc_ << "Vel cmd" << std::fixed << std::setprecision(4) << cmd_(0)
+              << cmd_(1) << cmd_(5) << fort::endr;
+
+  if (init) {
+    // Set text style
+    table_IMU_.row(0).set_cell_content_text_style(fort::text_style::bold);
+    table_IMU_.column(0).set_cell_content_text_style(fort::text_style::bold);
+    table_legs_.column(0).set_cell_content_text_style(fort::text_style::bold);
+    table_arms_.column(0).set_cell_content_text_style(fort::text_style::bold);
+    table_misc_.row(0).set_cell_content_text_style(fort::text_style::bold);
+    table_misc_.column(0).set_cell_content_text_style(fort::text_style::bold);
+
+    // Set alignment
+    table_IMU_.column(0).set_cell_text_align(fort::text_align::center);
+    for (int i = 1; i < 4; ++i) {
+      table_IMU_.column(i).set_cell_text_align(fort::text_align::right);
+      table_IMU_.column(i).set_cell_min_width(9);
+    }
+    table_IMU_[0][1].set_cell_text_align(fort::text_align::center);
+    table_IMU_[0][2].set_cell_text_align(fort::text_align::center);
+    table_IMU_[0][3].set_cell_text_align(fort::text_align::center);
+
+    table_legs_.column(0).set_cell_text_align(fort::text_align::center);
+    for (int i = 1; i < 11; ++i) {
+      table_legs_.column(i).set_cell_text_align(fort::text_align::right);
+      table_legs_.column(i).set_cell_min_width(9);
+    }
+
+    table_arms_.column(0).set_cell_text_align(fort::text_align::center);
+    for (int i = 1; i < 11; ++i) {
+      table_arms_.column(i).set_cell_text_align(fort::text_align::right);
+      table_arms_.column(i).set_cell_min_width(9);
+    }
+
+    table_misc_.column(0).set_cell_text_align(fort::text_align::center);
+    for (int i = 1; i < 4; ++i) {
+      table_misc_.column(i).set_cell_text_align(fort::text_align::right);
+      table_misc_.column(i).set_cell_min_width(9);
+    }
+    table_misc_[0][1].set_cell_text_align(fort::text_align::center);
+    table_misc_[0][2].set_cell_text_align(fort::text_align::center);
+    table_misc_[0][3].set_cell_text_align(fort::text_align::center);
+  }
+
+  switch (status_) {
+  case STATUS_INIT:
+    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+    std::cout << "    ┃      Initialization      ┃" << std::endl;
+    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    break;
+  case STATUS_WAITING_AIR:
+    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+    std::cout << "    ┃    Waiting in the air    ┃" << std::endl;
+    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    break;
+  case STATUS_WAITING_GRD:
+    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+    std::cout << "    ┃   Waiting on the ground  ┃" << std::endl;
+    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    break;
+  case STATUS_RUN:
+    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+    std::cout << "    ┃    Running Controller    ┃" << std::endl;
+    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    break;
+  case STATUS_DAMPING:
+    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+    std::cout << "    ┃    Emergency Damping!    ┃" << std::endl;
+    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    break;
+  }
+  std::cout << "    ┏━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+  std::cout << "    ┃    Sensor Data    ┃" << std::endl;
+  std::cout << "    ┗━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+  std::cout << table_IMU_.to_string() << std::endl;
+  std::cout << table_legs_.to_string() << std::endl;
+  std::cout << table_arms_.to_string() << std::endl;
+  std::cout << table_misc_.to_string() << std::endl;
+  std::cout << "Time: " << time_ << std::endl;
+}
+
+////
+// UTILS
+////
+
+char *HumanoidExample::getCurrentDateTime() {
+  std::time_t t = std::time(nullptr);
+  std::tm tm = *std::localtime(&t);
+  std::stringstream ss;
+  ss << std::put_time(&tm, "%Y-%m-%d_%H-%M-%S.txt");
+  char *result = new char[ss.str().length() + 1];
+  std::strcpy(result, ss.str().c_str());
+
+  return result;
+}
+
+void HumanoidExample::transformBodyQuat(Vector4 _bodyQuat) {
+  Vector3 _gravityVec, _qa, _qb, _qc, _qvec, _bodyOri;
+  float q_w = 0.0;
+  _gravityVec << 0.0, 0.0, -1.;
+
+  // Body QUAT and gravity vector of 0 , 0, -1
+  q_w = _bodyQuat[3];
+  _qvec = _bodyQuat.head(3);
+  _qa = _gravityVec * (2. * q_w * q_w - 1.);
+  _qb = _qvec.cross(_gravityVec) * q_w * 2.0;
+  _qc = _qvec * (_qvec.transpose() * _gravityVec) * 2.0;
+  _bodyOri = _qa - _qb + _qc;
 }
