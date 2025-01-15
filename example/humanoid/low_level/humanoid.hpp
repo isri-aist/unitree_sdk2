@@ -231,8 +231,8 @@ public:
         for (int i = 0; i < kNumMotors; ++i) {
           // Discard arm commands for now
           q_des = i < 10 ? network_cmd(i) : q_init_(i);
-          motor_command_tmp.kp.at(moti[i]) = kp_(i);
-          motor_command_tmp.kd.at(moti[i]) = kd_(i);
+          motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
+          motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
           motor_command_tmp.q_ref.at(moti[i]) = q_des;
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
