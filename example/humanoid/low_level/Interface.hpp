@@ -11,7 +11,6 @@
 #include <iostream>
 
 #include "Types.h"
-#include "cpuMLP.hpp"
 #include "OnnxWrapper.hpp"
 
 constexpr float pi_v = 3.14159265358979323846;
@@ -36,7 +35,7 @@ class Interface {
   /// \brief Destructor.
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  ~Interface() {}
+  ~Interface();
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -104,17 +103,17 @@ class Interface {
   }
 
   // Control policy
-  OnnxWrapper policy_;
+  OnnxWrapper *policy_;
 
   // Observation scaler
-  Scaler observationScaler_;
+   //Scaler observationScaler_;
 
   // Encoder policy
-  MLP encoderModel_;
+  // MLP encoderModel_;
   const bool useEncoder = false;
 
   // Encoder output scaler
-  Scaler encoderScaler_;
+  // Scaler encoderScaler_;
 
   // scales
   double _scaleAction, _hipReduction, _scaleQ, _scaleQd, _scaleLinVel, _scaleAngVel, _scaleHeights;
@@ -145,12 +144,15 @@ class Interface {
 };
 
 Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples, int historyStep) {
+  /*
   policy_ = MLP(std::vector<int>({512, 256, 128}), obsDim + latentDim, nJoints);
   if (useEncoder) {
     encoderModel_ = MLP(std::vector<int>({128, 64}), obsDim * historySamples, latentDim);
     encoderScaler_ = Scaler(latentDim);
   }
   observationScaler_ = Scaler(obsDim);
+  */
+  policy_ = nullptr;
   obsDim_ = obsDim;
   latentDim_ = latentDim;
   nJoints_ = nJoints;
@@ -175,11 +177,16 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
             << " | historyLength: " << historyLength_ << std::endl;
 }
 
+Interface::~Interface() {
+  delete policy_;
+  policy_ = nullptr;
+}
+
 void Interface::initialize(std::basic_string<ORTCHAR_T> model_file, VectorM q_ref, float action_scale, float dt) {
 
   // Initialize ONNX framework
-  policy_ = OnnxWrapper(model_file);
-  policy_.initialize();
+  policy_ = new OnnxWrapper(model_file);
+  policy_->initialize();
 
   /*
   policy_.updateParamFromTxt(polDirName + "actor.txt");
@@ -278,7 +285,7 @@ VectorM Interface::forward() {
   // -0.2679 , 0.57505;
 
   // Compute policy actions
-  actions_ = policy_.run(obs_); // historyObs_.head(obsDim_));
+  actions_ = policy_->run(obs_); // historyObs_.head(obsDim_));
 
   // Target joint positions based on scaled actions
   pTarget_ = (0.5 * actions_ + 0.5 * last_actions_) + q_ref_;

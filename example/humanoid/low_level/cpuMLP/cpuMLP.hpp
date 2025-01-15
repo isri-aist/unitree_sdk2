@@ -92,8 +92,7 @@ class MLP {
 
   inline Action forward(State &state) {
     // state = (state - running_mean).cwiseProduct(div_running_var_sqrt);
-    // std::cout << "State in " << state << std::endl << "State normed: " << state.cwiseMin(5.0).cwiseMax(-5.0) <<
-    // std::endl;
+    // std::cout << "State in " << state << std::endl << "State normed: " << state.cwiseMin(5.0).cwiseMax(-5.0) <<std::endl;
     lo[0] = state.cwiseMin(5.0).cwiseMax(-5.0);  // Clamp in [-5, 5] range
     for (int cnt = 0; cnt < (int)(Ws.size()) - 1; cnt++) {
       lo[cnt + 1] = Ws[cnt] * lo[cnt] + bs[cnt];

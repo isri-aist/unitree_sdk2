@@ -115,7 +115,10 @@ OnnxWrapper::OnnxWrapper(std::basic_string<ORTCHAR_T> model_file) {
   session_ = new Ort::Session(env, model_file.c_str(), session_options);
 }
 
-OnnxWrapper::~OnnxWrapper() {}
+OnnxWrapper::~OnnxWrapper() {
+  delete session_;
+  session_ = nullptr;
+}
 
 std::string OnnxWrapper::print_shape(const std::vector<std::int64_t> &v) {
   std::stringstream ss("");

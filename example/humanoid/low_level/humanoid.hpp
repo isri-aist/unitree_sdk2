@@ -16,15 +16,15 @@
 
 #include "Joystick.hpp"
 #include "base_state.h"
-#include "cpuMLP/Interface.hpp"
-#include "cpuMLP/Types.h"
+#include "Interface.hpp"
+#include "Types.h"
 #include "data_buffer.hpp"
 #include "lib/fort.c"
 #include "lib/fort.hpp"
 #include "logger.hpp"
 #include "motors.hpp"
 
-#define USE_JOYSTICK true
+#define USE_JOYSTICK false
 
 #define STATUS_INIT 0
 #define STATUS_WAITING_AIR 1
@@ -41,7 +41,7 @@ void waiting(HumanoidExample *HE);
 class HumanoidExample {
 public:
   HumanoidExample(const std::string &networkInterface = "")
-      : mlpInterface_(51, 0, 14, 1, 1) {
+      : mlpInterface_(35, 0, 10, 1, 1) {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 
@@ -79,8 +79,11 @@ public:
     }
 
     // Create link with MLP
+    // "/home/paleziart/git/policies/H1Terrain_08-13_14-34-35/nn/",
+    // "/home/paleziart/git/policies/H1Terrain_08-14_16-30-59/nn/"
+
     mlpInterface_.initialize(
-        "/home/paleziart/git/policies/H1Terrain_10-04_15-00-42/nn/",
+        "nn.onnx",
         q_init_.head(10), 0.5, control_dt_);
 
     // Initialize tables for console display
@@ -171,15 +174,21 @@ public:
     if (ms_tmp_ptr && bs_tmp_ptr) {
       time_ += control_dt_;
 
-      Vector20 pos, vel;
+      Vector20 pos, vel, tau;
       for (int i = 0; i < kNumMotors; ++i) {
         pos(i) = ms_tmp_ptr->q.at(moti[i]);
         vel(i) = ms_tmp_ptr->dq.at(moti[i]);
+        tau(i) = ms_tmp_ptr->tau.at(moti[i]);
       }
 
       // Check if joints are too close from position limits
-      const bool lim_lower = ((pos - 0.9 * q_lim_lower).array() < 0.0).any();
-      const bool lim_upper = ((pos - 0.9 * q_lim_upper).array() > 0.0).any();
+      const bool lim_lower = ((pos - 0.85 * q_lim_lower).array() < 0.0).any();
+      const bool lim_upper = ((pos - 0.85 * q_lim_upper).array() > 0.0).any();
+      // std::cout << "POS " << std::fixed << std::setprecision(4) <<
+      // (pos).transpose() << std::endl; std::cout << "LOW " << std::fixed <<
+      // std::setprecision(4) << (pos - 0.8 * q_lim_lower).transpose() <<
+      // std::endl; std::cout << "UPPER " << std::fixed << std::setprecision(4)
+      // << (pos - 0.8 * q_lim_upper).transpose() << std::endl;
 
       if (lim_lower || lim_upper) {
         status_ = STATUS_DAMPING;
@@ -202,28 +211,41 @@ public:
           cmd_ = Vector6::Zero();
         }
 
+        Vector3 rpy(bs_tmp_ptr->rpy.data());
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
         VectorM q_obs = VectorM::Zero();
         VectorM dq_obs = VectorM::Zero();
+        VectorM tau_obs = VectorM::Zero();
         // Retrieving leg joints and roll/pitch arm joints
         q_obs.head(10) = pos.head(10);
-        q_obs.block(10, 0, 2, 1) = pos.block(11, 0, 2, 1);
-        q_obs.block(12, 0, 2, 1) = pos.block(15, 0, 2, 1);
+        // q_obs.block(10, 0, 2, 1) = pos.block(11, 0, 2, 1);
+        // q_obs.block(12, 0, 2, 1) = pos.block(15, 0, 2, 1);
         dq_obs.head(10) = vel.head(10);
-        dq_obs.block(10, 0, 2, 1) = vel.block(11, 0, 2, 1);
-        dq_obs.block(12, 0, 2, 1) = vel.block(15, 0, 2, 1);
+        // dq_obs.block(10, 0, 2, 1) = vel.block(11, 0, 2, 1);
+        // dq_obs.block(12, 0, 2, 1) = vel.block(15, 0, 2, 1);
+        tau_obs.head(10) = tau.head(10);
 
-        mlpInterface_.update_observation(q_obs, dq_obs, quatPermut * ori, gyro,
-                                         cmd_, time_run_);
+        /*
+        std::cout << "Q" << std::endl << q_obs.transpose() << std::endl;
+        std::cout << "dQ" << std::endl << dq_obs.transpose() << std::endl;
+        std::cout << "ORI" << std::endl << (quatPermut * ori).transpose() << std::endl;
+        std::cout << "GYRO" << std::endl << gyro.transpose() << std::endl;
+        std::cout << "CMD" << std::endl << cmd_.transpose() << std::endl; 
+        */
+        
+        mlpInterface_.update_observation(q_obs, dq_obs, tau_obs, rpy,  // quatPermut * ori, gyro,
+                                         gyro, cmd_, time_run_);
 
-          /*std::cout
-              << std::setprecision(4)
-              << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
-              << std::endl;*/
+        // std::cout << std::setprecision(4) <<
+        // mlpInterface_.forward().transpose() << std::endl;
+        /*std::cout
+            << std::setprecision(4)
+            << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
+            << std::endl;*/
 
         VectorM policy_cmd = mlpInterface_.forward();
-        policy_cmd.tail(4) *= 0.0;
+        // policy_cmd.tail(4) *= 0.0;
         VectorM network_cmd = policy_cmd; // q_init_.head(10);
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
@@ -299,6 +321,20 @@ public:
       }
       LogAll();
     }
+  }
+
+
+  Vector3 transformoBodyQuat(Vector4 o) {
+    // Body QUAT and gravity vector of 0 , 0, -1
+    Eigen::Vector3f _gravityVec;
+    _gravityVec << 0.0, 0.0, -1.;
+
+    float q_w = o[3];
+    Eigen::Vector3f _qvec = o.head(3);
+    Eigen::Vector3f _qa = _gravityVec * (2. * q_w * q_w - 1.);
+    Eigen::Vector3f _qb = _qvec.cross(_gravityVec) * q_w * 2.0;
+    Eigen::Vector3f _qc = _qvec * (_qvec.transpose() * _gravityVec) * 2.0;
+    return _qa - _qb + _qc;
   }
 
   // Print sensor data to the terminal
@@ -608,8 +644,8 @@ private:
   int status_ = STATUS_INIT;
 
   // Default configuration
-  const Vector20 q_init_{ // -0.4 1.0 -0.6
-      0.0, 0.0, -0.4, 1.0, -0.6, 0.0, 0.0, -0.4, 1.0,  -0.6, // Legs
+  const Vector20 q_init_{
+      0.0, 0.0, -0.4, 0.8, -0.4, 0.0, 0.0, -0.4, 0.8, -0.4, // Legs
       0.0, 0.4, 0.0,  0.0, -0.4, 0.4, 0.0, 0.0, -0.4,       // Torso and arms
       0.0};                                                  // Unused joint
   const Vector20 q_lim_lower{-0.43, -0.43, -3.14, -0.26, -0.87,

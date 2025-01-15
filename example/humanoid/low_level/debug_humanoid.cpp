@@ -6,8 +6,8 @@
 #include <thread>
 #include <chrono>
 
-#include "cpuMLP/Types.h"
-#include "OnnxWrapper.hpp"
+#include "Types.h"
+#include "Interface.hpp"
 #include "Joystick.hpp"
 
 int main(int argc, ORTCHAR_T* argv[]) {

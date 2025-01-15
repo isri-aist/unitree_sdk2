@@ -9,7 +9,7 @@
 #ifndef JOYSTICK_H_INCLUDED
 #define JOYSTICK_H_INCLUDED
 
-#include "cpuMLP/Types.h"
+#include "Types.h"
 #include <chrono>
 #include <fcntl.h>
 #include <stdio.h>
