@@ -71,8 +71,7 @@ public:
         "report_sensors", UT_CPU_ID_NONE, report_period_us,
         &HumanoidExample::UpdateTables, this, false);
 
-    kp_ *= 0.0;
-    kd_ *= 0.0;
+    // Scale the policy control gains
 
     // Create the link with the joystick
     if (USE_JOYSTICK) {
