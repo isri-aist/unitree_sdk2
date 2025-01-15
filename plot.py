@@ -29,6 +29,9 @@ NTOT = len(data["time"])
 
 for key in data.keys():
     data[key] = np.array(data[key][:NTOT-1])
+    # Force infinite values to 0 for plotting purpose
+    idx = np.abs(data[key]) > 1e6
+    data[key][idx] = 0.0
 
 
 joint_indices = [7, 3, 4, 5, 10, 8, 0, 1, 2, 11, 6, 16, 17, 18, 19, 12, 13, 14, 15, 9]
