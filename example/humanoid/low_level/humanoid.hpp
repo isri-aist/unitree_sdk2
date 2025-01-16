@@ -223,6 +223,9 @@ public:
 
         // Inference to get position targets from the policy
         policy_out_ = mlpInterface_.forward();
+        for (int i = 0; i < 10; ++i) {
+          policy_log_[i] = policy_out_[i];
+        }
 
         // VectorM network_cmd = q_init_.head(10) * (1 - alpha) + policy_out_ * alpha;
         VectorM network_cmd = q_init_.head(10);
@@ -429,6 +432,7 @@ private:
                    0.0, 0.0, 0.0,  0.0,   0.0,  0.0, 0.0,  0.0,  0.0,   0.0};
 
   std::array<float, kNumMotors> tau_des_ = {};
+  std::array<float, 10> policy_log_ = {};
 
   Vector6 cmd_ = Vector6::Zero();
 
