@@ -102,8 +102,6 @@ private:
   std::vector<std::string> input_names_;  // Name of the inputs of the network
   std::vector<std::string> output_names_; // Name of the outputs of the network
 
-  std::vector<Ort::Value> input_tensors_; // Input tensors of the network
-
   int total_number_elements_; // Total number of elements in the input of the
                               // network
 };
@@ -185,16 +183,17 @@ void OnnxWrapper::initialize() {
   std::vector<float> input_tensor_values(total_number_elements_);
   std::generate(input_tensor_values.begin(), input_tensor_values.end(),
                 [&] { return rand() % 255; });
-  input_tensors_.emplace_back(
+  std::vector<Ort::Value> input_tensors;
+  input_tensors.emplace_back(
       vec_to_tensor<float>(input_tensor_values, input_shape));
 
   // double-check the dimensions of the input tensor
-  assert(input_tensors_[0].IsTensor() &&
-         input_tensors_[0].GetTensorTypeAndShapeInfo().GetShape() ==
+  assert(input_tensors[0].IsTensor() &&
+         input_tensors[0].GetTensorTypeAndShapeInfo().GetShape() ==
              input_shape);
   std::cout << "\ninput_tensor shape: "
             << print_shape(
-                   input_tensors_[0].GetTensorTypeAndShapeInfo().GetShape())
+                   input_tensors[0].GetTensorTypeAndShapeInfo().GetShape())
             << std::endl;
 
   // pass data through model
@@ -213,7 +212,7 @@ void OnnxWrapper::initialize() {
   try {
     auto output_tensors =
         session_->Run(Ort::RunOptions{nullptr}, input_names_char.data(),
-                      input_tensors_.data(), input_names_char.size(),
+                      input_tensors.data(), input_names_char.size(),
                       output_names_char.data(), output_names_char.size());
     std::cout << "Done!" << std::endl;
 
@@ -240,11 +239,12 @@ VectorM OnnxWrapper::run(const Eigen::VectorXf& v) {
   Eigen::VectorXf::Map(&std_v[0], v.size()) = v;
 
   // Convert std vector to ONNX Runtime tensor
-  input_tensors_.emplace_back(vec_to_tensor<float>(std_v, input_shapes_));
+  std::vector<Ort::Value> input_tensors;
+  input_tensors.emplace_back(vec_to_tensor<float>(std_v, input_shapes_));
 
   // Double-check the dimensions of the input tensor
-  assert(input_tensors_[0].IsTensor() &&
-         input_tensors_[0].GetTensorTypeAndShapeInfo().GetShape() ==
+  assert(input_tensors[0].IsTensor() &&
+         input_tensors[0].GetTensorTypeAndShapeInfo().GetShape() ==
              input_shapes_);
 
   // pass data through model
@@ -262,7 +262,7 @@ VectorM OnnxWrapper::run(const Eigen::VectorXf& v) {
   try {
     auto output_tensors =
         session_->Run(Ort::RunOptions{nullptr}, input_names_char.data(),
-                      input_tensors_.data(), input_names_char.size(),
+                      input_tensors.data(), input_names_char.size(),
                       output_names_char.data(), output_names_char.size());
     // Double-check the dimensions of the output tensors
     // NOTE: the number of output tensors is equal to the number of output nodes
