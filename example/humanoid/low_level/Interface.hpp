@@ -103,7 +103,7 @@ class Interface {
   }
 
   // Control policy
-  std::unique_ptr<OnnxWrapper> policy_;
+  std::shared_ptr<OnnxWrapper> policy_;
 
   // Observation scaler
    //Scaler observationScaler_;
@@ -179,7 +179,7 @@ Interface::Interface(int obsDim, int latentDim, int nJoints, int historySamples,
 void Interface::initialize(std::basic_string<ORTCHAR_T> model_file, VectorM q_ref, float action_scale, float dt) {
 
   // Initialize ONNX framework
-  policy_ = std::make_unique<OnnxWrapper>(model_file);
+  policy_ = std::make_shared<OnnxWrapper>(model_file);
   policy_->initialize();
 
   /*
