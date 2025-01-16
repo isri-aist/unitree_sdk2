@@ -10,7 +10,7 @@ SAVEFIGS = False
 
 import csv
 
-files = glob.glob("duild/2024-08-*.txt")
+files = glob.glob("fuild/2025-01-*.txt")
 files.sort()
 print("-- Plotting ", files[-1])
 datafile = open(files[-1], "r")
@@ -39,7 +39,7 @@ leg_indices = joint_indices[:10]
 arm_indices = joint_indices[11:19]
 
 
-def plot_leg_arm(ys, indices, lgd1, lgd2, lbls, title, yunit):
+def plot_leg_arm(ys, indices, lgd1, lgd2, lbls, title, yunit, k=False):
     mod = len(indices)
     mod2 = int(mod / 2)
     fig, axs = plt.subplots(
@@ -50,9 +50,12 @@ def plot_leg_arm(ys, indices, lgd1, lgd2, lbls, title, yunit):
     )
     for i in range(mod):
         for j, y in enumerate(ys):
+            idx = indices[i]
+            if k and j==2:
+                idx = i
             axs[int(i / mod2), i % mod2].plot(
                 data["time"][: ys[j].shape[0]],
-                ys[j][:, indices[i]],
+                ys[j][:, idx],
                 linestyle="-",
                 linewidth=3,
                 label=lbls[j],
@@ -77,13 +80,14 @@ lgd2 = ["Left", "Right"]
 
 # Display leg and arm joint positions
 plot_leg_arm(
-    [data["q_ref"], data["q"]],
+    [data["q_ref"], data["q"], data["policy_out"]],
     leg_indices,
     lgd1_leg,
     lgd2,
-    ["Desired", "Measured"],
+    ["Desired", "Measured", "Policy"],
     "Leg joint positions",
     " [rad]",
+    True,
 )
 
 plot_leg_arm(
