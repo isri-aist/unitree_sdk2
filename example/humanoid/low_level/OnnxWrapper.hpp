@@ -90,7 +90,7 @@ public:
   /// \param[in] v Vector of observations
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  VectorM run(Eigen::VectorXf v);
+  VectorM run(const Eigen::VectorXf& v);
 
 private:
   std::shared_ptr<Ort::Session> session_; // ONNX Runtime session
@@ -229,7 +229,7 @@ void OnnxWrapper::initialize() {
   }
 }
 
-VectorM OnnxWrapper::run(Eigen::VectorXf v) {
+VectorM OnnxWrapper::run(const Eigen::VectorXf& v) {
 
   // Check size of the input vector
   assert(v.size() == total_number_elements_);
