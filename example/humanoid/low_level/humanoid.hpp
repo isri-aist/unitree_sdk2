@@ -488,7 +488,7 @@ void HumanoidExample::endWaiting() {
 // READ / WRITE MESSAGES
 ////
 
-void LowCommandWriter() {
+void HumanoidExample::LowCommandWriter() {
   unitree_go::msg::dds_::LowCmd_ dds_low_command{};
   dds_low_command.head()[0] = 0xFE;
   dds_low_command.head()[1] = 0xEF;
@@ -573,7 +573,7 @@ void HumanoidExample::LogAll() {
     logi("{}", *bs_tmp_ptr);
   }
   logi("{}", "tau_des," + arrayToStringView(tau_des_));
-  logi("{}", "policy_out," + arrayToStringView(policy_out_));
+  logi("{}", "policy_out," + arrayToStringView(policy_log_));
 }
 
 ////
