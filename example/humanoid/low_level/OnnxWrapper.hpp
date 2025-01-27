@@ -90,7 +90,10 @@ public:
   /// \param[in] v Vector of observations
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  VectorM run(const Eigen::VectorXf& v);
+  Eigen::VectorXf run(const Eigen::VectorXf& v);
+
+  int get_obsDim() { return total_number_elements_; }
+  int get_actDim() { return output_shapes_[0]; }
 
 private:
   std::shared_ptr<Ort::Session> session_; // ONNX Runtime session
@@ -228,7 +231,7 @@ void OnnxWrapper::initialize() {
   }
 }
 
-VectorM OnnxWrapper::run(const Eigen::VectorXf& v) {
+Eigen::VectorXf OnnxWrapper::run(const Eigen::VectorXf& v) {
 
   // Check size of the input vector
   assert(v.size() == total_number_elements_);
@@ -258,6 +261,13 @@ VectorM OnnxWrapper::run(const Eigen::VectorXf& v) {
                  std::begin(output_names_char),
                  [&](const std::string &str) { return str.c_str(); });
 
+  // Get pointer to output tensor float values
+  /* float *floatarrin = input_tensors.front().GetTensorMutableData<float>();
+  std::cout << "in tensor" << std::endl;
+  for (int i = 0; i < 35; i++) {
+    std::cout << i << " " << floatarrin[i] << std::endl;
+  } */
+
   // Run inference
   try {
     auto output_tensors =
@@ -270,7 +280,8 @@ VectorM OnnxWrapper::run(const Eigen::VectorXf& v) {
     assert(output_tensors.size() == output_names_.size() &&
            output_tensors[0].IsTensor());
 
-    VectorM output = VectorM::Zero();
+    // Create output vector that will contain the actions
+    Eigen::VectorXf output = Eigen::VectorXf::Zero(get_actDim());
     assert(output.size() == output_shapes_[0]);
 
     // Get pointer to output tensor float values
