@@ -304,7 +304,7 @@ public:
         }
 
         // If transition is over, switch to the policy
-        if (time_run_ > interp_duration_) {
+        if (time_run_ >= interp_duration_) {
           time_run_ = -control_dt_;
           status_ = STATUS_RUN;
         }
