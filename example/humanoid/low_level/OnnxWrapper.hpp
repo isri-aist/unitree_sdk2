@@ -90,7 +90,7 @@ public:
   /// \param[in] v Vector of observations
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Eigen::VectorXf run(const Eigen::VectorXf& v);
+  Vxf run(const Vxf& v);
 
   int get_obsDim() { return total_number_elements_; }
   int get_actDim() { return output_shapes_[0]; }
@@ -231,7 +231,7 @@ void OnnxWrapper::initialize() {
   }
 }
 
-Eigen::VectorXf OnnxWrapper::run(const Eigen::VectorXf& v) {
+Vxf OnnxWrapper::run(const Vxf& v) {
 
   // Check size of the input vector
   assert(v.size() == total_number_elements_);
@@ -239,7 +239,7 @@ Eigen::VectorXf OnnxWrapper::run(const Eigen::VectorXf& v) {
   // Convert Eigen vector to std vector
   std::vector<float> std_v;
   std_v.resize(v.size());
-  Eigen::VectorXf::Map(&std_v[0], v.size()) = v;
+  Vxf::Map(&std_v[0], v.size()) = v;
 
   // Convert std vector to ONNX Runtime tensor
   std::vector<Ort::Value> input_tensors;
@@ -281,7 +281,7 @@ Eigen::VectorXf OnnxWrapper::run(const Eigen::VectorXf& v) {
            output_tensors[0].IsTensor());
 
     // Create output vector that will contain the actions
-    Eigen::VectorXf output = Eigen::VectorXf::Zero(get_actDim());
+    Vxf output = Vxf::Zero(get_actDim());
     assert(output.size() == output_shapes_[0]);
 
     // Get pointer to output tensor float values
