@@ -29,8 +29,9 @@
 #define STATUS_INIT 0
 #define STATUS_WAITING_AIR 1
 #define STATUS_WAITING_GRD 2
-#define STATUS_RUN 3
-#define STATUS_DAMPING 4
+#define STATUS_GAIN_TRANSITION 3
+#define STATUS_RUN 4
+#define STATUS_DAMPING 5
 
 static const std::string kTopicLowCommand = "rt/lowcmd";
 static const std::string kTopicLowState = "rt/lowstate";
@@ -172,6 +173,31 @@ public:
       case STATUS_RUN: {
         time_run_ += control_dt_;
 
+        /*
+        // Interpolation coefficient to slowly switch PD gains
+        float alpha = 1.0;
+        if (time_run_ < interp_duration_) {
+          alpha = time_run_ / interp_duration_;
+        }
+
+        for (int i = 0; i < kNumMotors; ++i) {
+          motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
+          motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
+          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+        }
+        // Inference to get position targets from the policy
+        policy_out_ = mlpInterface_.forward();
+        for (int i = 0; i < 10; ++i) {
+          policy_log_[i] = policy_out_[i];
+        }
+
+        if (time_run_ < interp_duration_) {
+          break;
+        }
+        */
+
         // Refresh joystick
         if (USE_JOYSTICK) {
           joy_.update_v_ref();
@@ -227,14 +253,14 @@ public:
           policy_log_[i] = policy_out_[i];
         }
 
-        // VectorM network_cmd = q_init_.head(10) * (1 - alpha) + policy_out_ * alpha;
-        VectorM network_cmd = q_init_.head(10);
+        // Send policy commands to the robot
+        VectorM network_cmd = policy_out_;
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
           // Discard arm commands for now
           q_des = i < 10 ? network_cmd(i) : q_init_(i);
-          motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
-          motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
+          motor_command_tmp.kp.at(moti[i]) = kp_(i);
+          motor_command_tmp.kd.at(moti[i]) = kd_(i);
           motor_command_tmp.q_ref.at(moti[i]) = q_des;
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
@@ -260,6 +286,27 @@ public:
           motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = tau_ff_(i) * 0.0;
+        }
+        break;
+      }
+      case STATUS_GAIN_TRANSITION: {
+        // Interpolation from waiting gains to policy gains
+        time_run_ += control_dt_;
+
+        // Slowly switch PD gains to policy gains
+        float alpha = time_run_ / interp_duration_;
+        for (int i = 0; i < kNumMotors; ++i) {
+          motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
+          motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
+          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+          motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+        }
+
+        // If transition is over, switch to the policy
+        if (time_run_ > interp_duration_) {
+          time_run_ = -control_dt_;
+          status_ = STATUS_RUN;
         }
         break;
       }
@@ -446,7 +493,7 @@ private:
   float time_ = 0.f;
   float time_run_ = 0.f;
   const float init_duration_ = 8.f;
-  const float interp_duration_ = 1.f
+  const float interp_duration_ = 0.1f;
 
   float report_dt_ = 0.1f;
 
@@ -484,7 +531,7 @@ void HumanoidExample::endWaiting() {
     wait_thread.detach();
   } else if (status_ == STATUS_WAITING_GRD) {
     time_run_ = -control_dt_;
-    status_ = STATUS_RUN;
+    status_ = STATUS_GAIN_TRANSITION;
   }
 }
 
@@ -790,6 +837,11 @@ void HumanoidExample::UpdateTables(bool init) {
   case STATUS_WAITING_GRD:
     std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
     std::cout << "    ┃   Waiting on the ground  ┃" << std::endl;
+    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    break;
+  case STATUS_GAIN_TRANSITION:
+    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
+    std::cout << "    ┃   PD Gains Transition    ┃" << std::endl;
     std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
     break;
   case STATUS_RUN:
