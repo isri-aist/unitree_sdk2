@@ -155,7 +155,7 @@ void Joystick::update_for_analysis(Vector6 des_vel_analysis, int N_analysis,
 
   // Set dimensions of arrays
   k_switch = Eigen::Matrix<int, 1, Eigen::Dynamic>::Zero(1, 2 * (n_steps + 1));
-  v_switch = MatrixN::Zero(6, 2 * (n_steps + 1));
+  v_switch = Mxf::Zero(6, 2 * (n_steps + 1));
 
   // Fill them
   k_switch(0, 0) = 0;

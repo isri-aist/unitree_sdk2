@@ -150,7 +150,7 @@ class Joystick {
 
   double dt_ = 0.0;  // Time step
 
-  VectorNi k_switch;  // Key frames for the polynomial velocity interpolation
+  Vxi k_switch;  // Key frames for the polynomial velocity interpolation
   Matrix6N v_switch;  // Target velocity for the key frames
 
   // How much the gamepad velocity and position is filtered to avoid sharp changes
