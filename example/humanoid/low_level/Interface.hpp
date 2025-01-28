@@ -10,13 +10,13 @@
 #include <chrono>
 #include <iostream>
 
-#include "Types.h"
 #include "OnnxWrapper.hpp"
+#include "Types.h"
 
 constexpr float pi_v = 3.14159265358979323846;
 
 class Interface {
- public:
+public:
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
   /// \brief Constructor
@@ -29,18 +29,19 @@ class Interface {
   /// \brief Destructor.
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  ~Interface() {};
+  ~Interface(){};
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
   /// \brief Initializer
   ///
-  /// \param[in] model_file Path to the .onnx model file that contains policy parameters
-  /// \param[in] q_ref Reference joint configuration around which to apply the actions
-  /// \param[in] dt Control time step
+  /// \param[in] model_file Path to the .onnx model file that contains policy
+  /// parameters \param[in] q_ref Reference joint configuration around which to
+  /// apply the actions \param[in] dt Control time step
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void initialize(std::basic_string<ORTCHAR_T> model_file, const Vxf& q_ref, float dt);
+  void initialize(std::basic_string<ORTCHAR_T> model_file, const Vxf &q_ref,
+                  float dt);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -48,7 +49,7 @@ class Interface {
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
   Vxf forward();
-  Vxf forward_ManiSkill();  // Forward pass with ManiSkill policy
+  Vxf forward_ManiSkill(); // Forward pass with ManiSkill policy
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -63,16 +64,23 @@ class Interface {
   /// \param[in] time Elapsed time to compute limb phases
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void update_observation(const Vector19& pos, const Vector19& vel, const Vector19& tau, const Vector3& rpy,
-                          const Vector4& ori, const Vector3& gyro, const Vector6& cmd, float time);
-  void update_observation_with_clock(const Vector19& pos, const Vector19& vel, const Vector19& tau, const Vector3& rpy,
-                                     const Vector4& ori, const Vector3& gyro, const Vector6& cmd, float time);
-  void update_observation_ManiSkill(const Vector19& pos, const Vector19& vel, const Vector19& tau, const Vector3& rpy,
-                                    const Vector4& ori, const Vector3& gyro, const Vector6& cmd, float time);
+  void update_observation(const Vector19 &pos, const Vector19 &vel,
+                          const Vector19 &tau, const Vector3 &rpy,
+                          const Vector4 &ori, const Vector3 &gyro,
+                          const Vector6 &cmd, float time);
+  void update_observation_with_clock(const Vector19 &pos, const Vector19 &vel,
+                                     const Vector19 &tau, const Vector3 &rpy,
+                                     const Vector4 &ori, const Vector3 &gyro,
+                                     const Vector6 &cmd, float time);
+  void update_observation_ManiSkill(const Vector19 &pos, const Vector19 &vel,
+                                    const Vector19 &tau, const Vector3 &rpy,
+                                    const Vector4 &ori, const Vector3 &gyro,
+                                    const Vector6 &cmd, float time);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
-  /// \brief Refresh history vector based on previously computed observation vector
+  /// \brief Refresh history vector based on previously computed observation
+  /// vector
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
   void update_history();
@@ -91,7 +99,7 @@ class Interface {
   /// \param[in] v The observation vector to be reordered
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vector19 reorder_obs(const Vector19& v);
+  Vector19 reorder_obs(const Vector19 &v);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -100,7 +108,7 @@ class Interface {
   /// \param[in] v The action vector to be reordered
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vxf reorder_act(const Vxf& v);
+  Vxf reorder_act(const Vxf &v);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -109,7 +117,9 @@ class Interface {
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
   float get_computation_time() {
-    return static_cast<float>(std::chrono::duration_cast<std::chrono::microseconds>(t_end_ - t_start_).count());
+    return static_cast<float>(
+        std::chrono::duration_cast<std::chrono::microseconds>(t_end_ - t_start_)
+            .count());
   }
 
   int get_obsDim() { return policy_->get_obsDim(); }
@@ -120,7 +130,8 @@ class Interface {
 
   // Misc
   Vector3 vel_command_ = Vector3::Zero();
-  Vxf pTarget_, q_ref_, bound_pi_, obs_, actorObs_, studentObs_, historyObs_, historyTempObs_, latentOut_, actions_;
+  Vxf pTarget_, q_ref_, bound_pi_, obs_, actorObs_, studentObs_, historyObs_,
+      historyTempObs_, latentOut_, actions_;
   Mxf last_actions_; // , last_dof_pos_, last_dof_vel_;
   int obsDim_, actDim_, historyLength_, historySamples_, historyStep_, iter_;
   float dt_;
@@ -145,7 +156,8 @@ Interface::Interface() {
   iter_ = 0;
 }
 
-void Interface::initialize(std::basic_string<ORTCHAR_T> model_file, const Vxf& q_ref, float dt) {
+void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
+                           const Vxf &q_ref, float dt) {
 
   // Initialize ONNX framework
   policy_ = std::make_shared<OnnxWrapper>(model_file);
@@ -194,7 +206,7 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file, const Vxf& q
 }
 
 Vxf Interface::forward() {
-  
+
   // Compute policy actions
   actions_ = policy_->run(obs_);
 
@@ -211,8 +223,10 @@ Vxf Interface::forward() {
   return pTarget_;
 }
 
-void Interface::update_observation_with_clock(const Vector19& pos, const Vector19& vel, const Vector19& tau, const Vector3& rpy,
-                                              const Vector4& ori, const Vector3& gyro, const Vector6& cmd, float time) {
+void Interface::update_observation_with_clock(
+    const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
+    const Vector3 &rpy, const Vector4 &ori, const Vector3 &gyro,
+    const Vector6 &cmd, float time) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
@@ -239,8 +253,10 @@ void Interface::update_observation_with_clock(const Vector19& pos, const Vector1
   iter_++;
 }
 
-void Interface::update_observation(const Vector19& pos, const Vector19& vel, const Vector19& tau, const Vector3& rpy,
-                                   const Vector4& ori, const Vector3& gyro, const Vector6& cmd, float time) {
+void Interface::update_observation(const Vector19 &pos, const Vector19 &vel,
+                                   const Vector19 &tau, const Vector3 &rpy,
+                                   const Vector4 &ori, const Vector3 &gyro,
+                                   const Vector6 &cmd, float time) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
@@ -249,16 +265,11 @@ void Interface::update_observation(const Vector19& pos, const Vector19& vel, con
   Vector3 base_ang_vel = gyro;
 
   // Filling observation vector
-  obs_ << roll,
-          pitch,
-          base_ang_vel,
-          pos.head(10),
-          vel.head(10),
-          tau.head(10);
+  obs_ << roll, pitch, base_ang_vel, pos.head(10), vel.head(10), tau.head(10);
   assert(obs_.rows() == obsDim_);
 
   // Save last actions, joint pos and joint vel
-  /* 
+  /*
   for (int j = 5; j > 0; j--) {
     last_actions_.col(j) = last_actions_.col(j - 1);
     last_dof_pos_.col(j) = last_dof_pos_.col(j - 1);
@@ -274,18 +285,21 @@ void Interface::update_observation(const Vector19& pos, const Vector19& vel, con
 }
 
 void Interface::update_history() {
-  // Discard the last observation sample in history and insert the latest one at the beginning
+  // Discard the last observation sample in history and insert the latest one at
+  // the beginning
   historyTempObs_ = historyObs_;
   if (historyLength_ > 1) {
-    historyObs_.tail(obsDim_ * (historyLength_ - 1)) = historyTempObs_.head(obsDim_ * (historyLength_ - 1));
+    historyObs_.tail(obsDim_ * (historyLength_ - 1)) =
+        historyTempObs_.head(obsDim_ * (historyLength_ - 1));
   }
 
   // Insert new observations into history
   historyObs_.head(obsDim_) = obs_; // observationScaler_.scale(obs_);
 
-  // Fill observation vector for student by extracting the right samples from the observation history
-  // for (int i = 0; i < historySamples_; i++) {
-  //   studentObs_.block(i * obsDim_, 0, obsDim_, 1) = historyObs_.block(i * historyStep_ * obsDim_, 0, obsDim_, 1);
+  // Fill observation vector for student by extracting the right samples from
+  // the observation history for (int i = 0; i < historySamples_; i++) {
+  //   studentObs_.block(i * obsDim_, 0, obsDim_, 1) = historyObs_.block(i *
+  //   historyStep_ * obsDim_, 0, obsDim_, 1);
   // }
 }
 
@@ -303,18 +317,19 @@ void Interface::transformBodyQuat() {
 // FOR MANISKILL
 ////
 
-Vector19 Interface::reorder_obs(const Vector19& v) {
+Vector19 Interface::reorder_obs(const Vector19 &v) {
 
   // From URDF order to ManiSkill order
   Vector19 out = Vector19::Zero();
-  int idx[19] = {0, 5, 10, 1, 6, 11, 15, 2, 7, 12, 16, 3, 8, 13, 17, 4, 9, 14, 18};
+  int idx[19] = {0,  5, 10, 1,  6,  11, 15, 2,  7, 12,
+                 16, 3, 8,  13, 17, 4,  9,  14, 18};
   for (int i = 0; i < 19; i++) {
     out[i] = v[idx[i]];
   }
   return out;
 }
 
-Vxf Interface::reorder_act(const Vxf& v) {
+Vxf Interface::reorder_act(const Vxf &v) {
 
   // From ManiSkill order to URDF order
   Vxf out = Vxf::Zero(10);
@@ -340,14 +355,16 @@ Vxf Interface::forward_ManiSkill() {
   return pTarget_;
 }
 
-void Interface::update_observation_ManiSkill(const Vector19& pos, const Vector19& vel, const Vector19& tau, const Vector3& rpy,
-                                             const Vector4& ori, const Vector3& gyro, const Vector6& cmd, float time) {
+void Interface::update_observation_ManiSkill(
+    const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
+    const Vector3 &rpy, const Vector4 &ori, const Vector3 &gyro,
+    const Vector6 &cmd, float time) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
   // Projected gravity based on orientation state
   _bodyQuat = ori;
-  transformBodyQuat();  // this update _bodyOri
+  transformBodyQuat(); // this update _bodyOri
   Vector3 projected_gravity = _bodyOri;
 
   Vector3 base_ang_vel = gyro;
@@ -358,7 +375,7 @@ void Interface::update_observation_ManiSkill(const Vector19& pos, const Vector19
           reorder_obs(vel),
           actions_,
           base_ang_vel,
-          Vxf::Zero(47);  // Discarded priv obs
+          Vxf::Zero(47); // Discarded priv obs
   assert(obs_.rows() == obsDim_);
 
   // Iteration counter
