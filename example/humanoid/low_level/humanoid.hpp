@@ -154,15 +154,19 @@ public:
       // Check if joints are too close from position limits
       const bool lim_lower = ((pos - 0.85 * q_lim_lower).array() < 0.0).any();
       const bool lim_upper = ((pos - 0.85 * q_lim_upper).array() > 0.0).any();
-      // std::cout << "POS " << std::fixed << std::setprecision(4) <<
-      // (pos).transpose() << std::endl; std::cout << "LOW " << std::fixed <<
-      // std::setprecision(4) << (pos - 0.8 * q_lim_lower).transpose() <<
-      // std::endl; std::cout << "UPPER " << std::fixed << std::setprecision(4)
-      // << (pos - 0.8 * q_lim_upper).transpose() << std::endl;
-
       if (lim_lower || lim_upper) {
         status_ = STATUS_DAMPING;
       }
+
+      // Check if joint velocities are too high
+      const bool lim_velocity = ((vel.array().abs() - 8) > 0.0).any();
+      if (lim_velocity) {
+        std::cout << "Velocity threshold breached!!!" << std::endl;
+        std::cout << "VEL: " << std::fixed << std::setprecision(4) << vel.transpose() << std::endl;
+        status_ = STATUS_DAMPING;
+      }
+
+      // Switch to waiting after initialization
       if ((status_ == STATUS_INIT) && (time_ > init_duration_)) {
         status_ = STATUS_WAITING_AIR;
         std::thread wait_thread(waiting, this);
