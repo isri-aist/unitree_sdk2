@@ -43,7 +43,7 @@ class HumanoidExample {
 public:
   HumanoidExample(const std::string &networkInterface = "",
                   const std::string &model_file = "")
-      : mlpInterface_(35, 0, 10, 1, 1) {
+      : mlpInterface_() {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 
@@ -73,14 +73,19 @@ public:
         &HumanoidExample::UpdateTables, this, false);
 
     // Scale the policy control gains
-
+    // kp_ *= 0.0;
+    // kd_ *= 0.0;
+    // kp_wait_ *= 0.0;
+    // kd_wait_ *= 0.0;
+  
     // Create the link with the joystick
     if (USE_JOYSTICK) {
       joy_.initialize(control_dt_);
     }
 
-    // Create link with MLP
-    mlpInterface_.initialize(model_file, q_init_.head(10), 0.5, control_dt_);
+    // Create link with network interface
+    mlpInterface_.initialize(model_file, q_init_.head(10), control_dt_);
+    policy_out_ = Vxf::Zero(mlpInterface_.get_actDim());
 
     // Initialize tables for console display
     UpdateTables(true);
@@ -213,52 +218,33 @@ public:
         Vector3 rpy(bs_tmp_ptr->rpy.data());
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
-        VectorM q_obs = VectorM::Zero();
-        VectorM dq_obs = VectorM::Zero();
-        VectorM tau_obs = VectorM::Zero();
-        // Retrieving leg joints and roll/pitch arm joints
-        q_obs.head(10) = pos.head(10);
-        // q_obs.block(10, 0, 2, 1) = pos.block(11, 0, 2, 1);
-        // q_obs.block(12, 0, 2, 1) = pos.block(15, 0, 2, 1);
-        dq_obs.head(10) = vel.head(10);
-        // dq_obs.block(10, 0, 2, 1) = vel.block(11, 0, 2, 1);
-        // dq_obs.block(12, 0, 2, 1) = vel.block(15, 0, 2, 1);
-        tau_obs.head(10) = tau.head(10);
+
+        // Update observation vector (ManiSkill)
+        mlpInterface_.update_observation_ManiSkill(pos.head(19), vel.head(19), tau.head(19), rpy,
+                                                   quatPermut * ori, gyro, cmd_, time_run_);
+
+        // Inference to get position targets from the policy (ManiSkill)
+        policy_out_ = mlpInterface_.forward_ManiSkill();
 
         /*
-        std::cout << "Q" << std::endl << q_obs.transpose() << std::endl;
-        std::cout << "dQ" << std::endl << dq_obs.transpose() << std::endl;
-        std::cout << "ORI" << std::endl << (quatPermut * ori).transpose() <<
-        std::endl; std::cout << "GYRO" << std::endl << gyro.transpose() <<
-        std::endl; std::cout << "CMD" << std::endl << cmd_.transpose() <<
-        std::endl;
+        // Update observation vector (Mujoco)
+        mlpInterface_.update_observation_with_clock(pos.head(19), vel.head(19), tau.head(19), rpy,
+                                                    quatPermut * ori,  gyro, cmd_, 0.5 + time_run_);
+        
+        // Inference to get position targets from the policy (Mujoco)
+        policy_out_ = mlpInterface_.forward();
         */
 
-        mlpInterface_.update_observation(q_obs, dq_obs, tau_obs,
-                                         rpy, // quatPermut * ori, gyro,
-                                         gyro, cmd_, time_run_);
+        // Check policy output size
+        assert(policy_out_.rows() == mlpInterface_.get_actDim());
 
-        // std::cout << std::setprecision(4) <<
-        // mlpInterface_.forward().transpose() << std::endl;
-        /*std::cout
-            << std::setprecision(4)
-            << mlpInterface_.historyObs_.head(mlpInterface_.obsDim_).transpose()
-            << std::endl;*/
-
-        // Interpolation coefficient to slowly switch to full policy output
-        float alpha = 1.0;
-        if (time_run_ < interp_duration_) {
-          alpha = time_run_ / interp_duration_;
-        }
-
-        // Inference to get position targets from the policy
-        policy_out_ = mlpInterface_.forward();
-        for (int i = 0; i < 10; ++i) {
+        // Logging policy output
+        for (int i = 0; i < policy_out_.rows(); ++i) {
           policy_log_[i] = policy_out_[i];
         }
 
         // Send policy commands to the robot
-        VectorM network_cmd = policy_out_;
+        Vxf network_cmd = policy_out_;
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
           // Discard arm commands for now
@@ -438,7 +424,7 @@ private:
   Interface mlpInterface_;
 
   // control params
-  const float control_dt_ = 0.02f;
+  const float control_dt_ = 0.025f;
 
   int status_ = STATUS_INIT;
 
@@ -487,12 +473,12 @@ private:
 
   Vector6 cmd_ = Vector6::Zero();
 
-  VectorM policy_out_ = VectorM::Zero();
+  Vxf policy_out_;
 
-  const Matrix4 quatPermut{{0, 1, 0, 0},
-                           {0, 0, 1, 0},
-                           {0, 0, 0, 1},
-                           {1, 0, 0, 0}}; // Reorder quat vector
+  const Eigen::Matrix<float, 4, 4> quatPermut{{0, 1, 0, 0},
+                                              {0, 0, 1, 0},
+                                              {0, 0, 0, 1},
+                                              {1, 0, 0, 0}}; // Reorder quat vector
 
   float time_ = 0.f;
   float time_run_ = 0.f;
