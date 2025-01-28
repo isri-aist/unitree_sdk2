@@ -28,7 +28,7 @@ public:
   /// \brief Empty constructor
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  OnnxWrapper() {};
+  OnnxWrapper(){};
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -44,7 +44,7 @@ public:
   /// \brief Destructor.
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  ~OnnxWrapper() {};
+  ~OnnxWrapper(){};
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -90,7 +90,7 @@ public:
   /// \param[in] v Vector of observations
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vxf run(const Vxf& v);
+  Vxf run(const Vxf &v);
 
   int get_obsDim() { return total_number_elements_; }
   int get_actDim() { return output_shapes_[0]; }
@@ -113,7 +113,8 @@ OnnxWrapper::OnnxWrapper(std::basic_string<ORTCHAR_T> model_file) {
   // onnxruntime setup
   Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "example-model-explorer");
   Ort::SessionOptions session_options;
-  session_ = std::make_shared<Ort::Session>(env, model_file.c_str(), session_options);
+  session_ =
+      std::make_shared<Ort::Session>(env, model_file.c_str(), session_options);
 }
 
 std::string OnnxWrapper::print_shape(const std::vector<std::int64_t> &v) {
@@ -231,7 +232,7 @@ void OnnxWrapper::initialize() {
   }
 }
 
-Vxf OnnxWrapper::run(const Vxf& v) {
+Vxf OnnxWrapper::run(const Vxf &v) {
 
   // Check size of the input vector
   assert(v.size() == total_number_elements_);
