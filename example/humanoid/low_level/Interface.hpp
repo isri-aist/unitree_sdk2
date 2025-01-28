@@ -130,7 +130,7 @@ public:
 
   // Misc
   Vector3 vel_command_ = Vector3::Zero();
-  Vxf pTarget_, q_ref_, bound_pi_, obs_, actorObs_, studentObs_, historyObs_,
+  Vxf pTarget_, q_ref_, obs_, actorObs_, studentObs_, historyObs_,
       historyTempObs_, latentOut_, actions_;
   Mxf last_actions_; // , last_dof_pos_, last_dof_vel_;
   int obsDim_, actDim_, historyLength_, historySamples_, historyStep_, iter_;
@@ -184,7 +184,6 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
   last_dof_vel_ = Eigen::MatrixXf::Zero(nJoints, 6);*/
 
   // Reference position around which to apply the actions
-  assert(q_ref.rows() == actDim_);
   q_ref_ = q_ref;
 
   // Initial phases
@@ -192,12 +191,11 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
   phases_ << 0.0, pi_v;
 
   // Related to orientation
-  _gravityVec << 0.0, 0.0, 1.;
+  _gravityVec << 0.0, 0.0, 1.0;
   _qa.setZero();
   _qb.setZero();
   _qc.setZero();
   _qvec.setZero();
-  bound_pi_ << Vxf::Ones(actDim_) * pi_v;
 
   // Initial times
   dt_ = dt;
@@ -211,6 +209,7 @@ Vxf Interface::forward() {
   actions_ = policy_->run(obs_);
 
   // Target joint positions based on scaled actions
+  assert(q_ref_.rows() == actDim_);
   pTarget_ = q_ref_ + (0.5 * actions_ + 0.5 * last_actions_);
   assert(pTarget_.rows() == actDim_);
 
@@ -346,8 +345,9 @@ Vxf Interface::forward_ManiSkill() {
   actions_ = policy_->run(obs_);
 
   // Target joint positions based on scaled actions
+  assert(q_ref_.rows() == reorder_act(actions_).rows());
   pTarget_ = q_ref_ + 1.0 * reorder_act(actions_);
-  assert(pTarget_.rows() == actDim_);
+  assert(pTarget_.rows() == q_ref_.rows());
 
   // Log time
   t_end_ = std::chrono::steady_clock::now();
