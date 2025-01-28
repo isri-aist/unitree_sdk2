@@ -1,49 +1,62 @@
+#include <chrono>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <stdint.h>
 #include <string>
 #include <thread>
-#include <chrono>
 
-#include "Types.h"
 #include "Interface.hpp"
 #include "Joystick.hpp"
+#include "Types.h"
 
-int main(int argc, ORTCHAR_T* argv[]) {
+int main(int argc, ORTCHAR_T *argv[]) {
 
-  using std::chrono::high_resolution_clock;
-  using std::chrono::duration_cast;
   using std::chrono::duration;
+  using std::chrono::duration_cast;
+  using std::chrono::high_resolution_clock;
   using std::chrono::microseconds;
 
   std::cout << "Hello there!" << std::endl;
-  
+
   if (argc != 2) {
-    std::cout << "Usage: ./onnx-api-example <onnx_model.onnx>" << std::endl;
+    std::cout << "Usage: ./bin/h1_test_example <onnx_model.onnx>" << std::endl;
     return -1;
   }
 
   std::basic_string<ORTCHAR_T> model_file = argv[1];
-  
-  OnnxWrapper wrapper(model_file);
-  wrapper.initialize();
+
+  std::unique_ptr<OnnxWrapper> wrapper;
+  wrapper = std::make_unique<OnnxWrapper>(model_file);
+  wrapper->initialize();
+  const int obsDim = wrapper->get_obsDim();
+
+  // No need to print with high precision
+  std::cout << std::setprecision(3);
 
   // Run one inference
-  VectorM A = wrapper.run(Eigen::VectorXf::Ones(35));
-  std::cout << "Output:" << std::endl << A.transpose() << std::endl;
+  Vxf input = Vxf::Ones(obsDim);
+  Vxf A = wrapper->run(input);
+  std::cout << "Output for obs vector full of 1s:" << std::endl
+            << A.transpose() << std::endl;
+
+  input = Vxf::Zero(obsDim);
+  A = wrapper->run(input);
+  std::cout << "Output for obs vector full of 0s:" << std::endl
+            << A.transpose() << std::endl;
 
   // Time the average computation time for inference
   auto t1 = high_resolution_clock::now();
-  for(int i = 0; i < 100; i++) {
-    wrapper.run(Eigen::VectorXf::Zero(35));
+  for (int i = 0; i < 100; i++) {
+    wrapper->run(Vxf::Zero(obsDim));
   }
   auto t2 = high_resolution_clock::now();
 
   // Getting number of microseconds as a double.
   duration<double, std::micro> ms_double = t2 - t1;
 
-  std::cout << "Average computation time: " << ms_double.count() / 100 << " us\n";
+  std::cout << "Average computation time: " << ms_double.count() / 100
+            << " us\n";
 
   return 0;
 
@@ -55,7 +68,7 @@ int main(int argc, ORTCHAR_T* argv[]) {
       0.0};                                                  // Unused joint
 
   // MLP interface
-  Interface mlpInterface_(51, 0, 10, 1, 1);
+  Interface mlpInterface_;
 
   Vector10 q_init_cut = q_init.head(10);
   // Vector4 q_arms; q_arms << 0.4, -0.4, 0.4, -0.4;
@@ -63,11 +76,12 @@ int main(int argc, ORTCHAR_T* argv[]) {
 
   // Create link with MLP
   mlpInterface_.initialize(
-      "/home/paleziart/git/policies/H1Terrain_10-01_18-04-38/nn/",
-      q_init_cut, 0.5, 0.02);
+      "/home/paleziart/git/policies/H1Terrain_10-01_18-04-38/nn/", q_init_cut,
+      0.02);
 
   Vector10 pos = q_init.head(10);
-  pos << 0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6,  -0.4; // , 0.4, 0.0, 0.4, 0.0;
+  pos << 0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2, 0.6,
+      -0.4; // , 0.4, 0.0, 0.4, 0.0;
   Vector10 vel = Vector10::Zero();
   Vector10 tau = Vector10::Zero();
   Vector4 ori{0.0, 0.0, 0.0, 1.0};
@@ -81,17 +95,16 @@ int main(int argc, ORTCHAR_T* argv[]) {
   std::cout << "TAU" << std::endl << tau.transpose() << std::endl;
   std::cout << "ORI" << std::endl << ori.transpose() << std::endl;
   std::cout << "GYRO" << std::endl << gyro.transpose() << std::endl;
-  std::cout << "CMD" << std::endl << cmd.transpose() << std::endl; 
+  std::cout << "CMD" << std::endl << cmd.transpose() << std::endl;
 
   for (int i = 0; i < 2; i++) {
 
     std::cout << "---- " << i << std::endl;
 
-    mlpInterface_.update_observation(pos.head(10), vel.head(10), tau.head(10), rpy, gyro,
-                                     cmd, time);
+    mlpInterface_.update_observation(pos.head(10), vel.head(10), tau.head(10),
+                                     rpy, ori, gyro, cmd, time);
 
     mlpInterface_.forward();
-
   }
   return 0;
 
@@ -104,6 +117,6 @@ int main(int argc, ORTCHAR_T* argv[]) {
     std::this_thread::sleep_for(20ms);
     std::cout << joy.getVRef().transpose() << std::endl;
   }
-  
+
   return 0;
 }
