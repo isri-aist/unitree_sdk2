@@ -168,8 +168,8 @@ fig.canvas.manager.set_window_title("Angular velocity [rad/s]")
 # Compute IMU projected gravity from IMU quaternion
 def transformBodyQuat(bodyQuat):
 
-    # Body QUAT and gravity vector of 0 , 0, -1
-    gravityVec = np.array([[0.0, 0.0, -1.0]]).transpose()
+    # Body QUAT and gravity vector of 0 , 0, +1
+    gravityVec = np.array([[0.0, 0.0, 1.0]]).transpose()
 
     """from IPython import embed
 
