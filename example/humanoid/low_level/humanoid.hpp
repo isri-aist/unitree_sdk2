@@ -280,11 +280,21 @@ public:
         break;
       }
       case STATUS_GAIN_TRANSITION: {
+
+        bool start = true;
+        if (USE_JOYSTICK) {
+          joy_.update_v_ref();
+          start = (joy_.getStart()==1);
+        }
+
         // Interpolation from waiting gains to policy gains
-        time_run_ += control_dt_;
+        float alpha = 0;
+        if (start) {
+          time_run_ += control_dt_;
+          alpha = std::clamp(0.f, 1.f, time_run_ / interp_duration_);
+        }
 
         // Slowly switch PD gains to policy gains
-        float alpha = time_run_ / interp_duration_;
         for (int i = 0; i < kNumMotors; ++i) {
           motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
           motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
@@ -294,7 +304,7 @@ public:
         }
 
         // If transition is over, switch to the policy
-        if (time_run_ >= interp_duration_) {
+        if (time_run_ >= interp_duration_ && start) {
           time_run_ = -control_dt_;
           status_ = STATUS_RUN;
         }
@@ -483,7 +493,7 @@ private:
   float time_ = 0.f;
   float time_run_ = 0.f;
   const float init_duration_ = 5.f;
-  const float interp_duration_ = 0.1f;
+  const float interp_duration_ = 1.f;
 
   float report_dt_ = 0.1f;
 
