@@ -157,8 +157,8 @@ class Joystick {
   const double gp_alpha_vel = 0.05;  // Low pass filter coefficient for v_ref_ (if gamepad-controlled)
 
   // Maximum velocity values
-  const double vXScale = 0.15;   // Lateral
-  const double vYScale = 0.15;   // Forward
+  const double vXScale = 0.5;   // Lateral
+  const double vYScale = 0.5;   // Forward
   const double vYawScale = 0.3;  // Rotation
 
   // Gamepad client variables

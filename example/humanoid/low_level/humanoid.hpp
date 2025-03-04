@@ -24,7 +24,7 @@
 #include "logger.hpp"
 #include "motors.hpp"
 
-#define USE_JOYSTICK false
+#define USE_JOYSTICK true
 
 #define STATUS_INIT 0
 #define STATUS_WAITING_AIR 1
@@ -84,7 +84,7 @@ public:
     }
 
     // Create link with network interface
-    mlpInterface_.initialize(model_file, q_init_.head(10), control_dt_);
+    mlpInterface_.initialize(model_file, q_init_.head(19), control_dt_);
     policy_out_ = Vxf::Zero(mlpInterface_.get_actDim());
 
     // Initialize tables for console display
@@ -160,11 +160,12 @@ public:
       const bool lim_lower = ((pos - 0.85 * q_lim_lower).array() < 0.0).any();
       const bool lim_upper = ((pos - 0.85 * q_lim_upper).array() > 0.0).any();
       if (lim_lower || lim_upper) {
+        std::cout << "Joint range threshold breached!!!" << std::endl;
         status_ = STATUS_DAMPING;
       }
 
       // Check if joint velocities are too high
-      const bool lim_velocity = ((vel.array().abs() - 8) > 0.0).any();
+      const bool lim_velocity = ((vel.array().abs() - qdot_limit.array()) > 0.0).any();
       if (lim_velocity) {
         std::cout << "Velocity threshold breached!!!" << std::endl;
         std::cout << "VEL: " << std::fixed << std::setprecision(4) << vel.transpose() << std::endl;
@@ -215,28 +216,48 @@ public:
           cmd_ = Vector6::Zero();
         }
 
+        cmd_ << 0, 0, 1, 0, 0, 0;
+        if (USE_JOYSTICK) {
+          if (joy_.getCross()) {
+            float yaw_vref = joy_.getVRef()[1];
+            cmd_ << 0, 1, 0, yaw_vref, 0, 0;
+          }
+          if (joy_.getSquare()) {
+            float vx_vref = joy_.getVRef()[0];
+            float vy_vref = joy_.getVRef()[1];
+            cmd_ << 1, 0, 0, 0, vx_vref, vy_vref;
+          }
+          if (joy_.getCircle()) {
+            cmd_ << Vector6::Zero();
+            status_ = STATUS_DAMPING;
+          }
+        }
+
         Vector3 rpy(bs_tmp_ptr->rpy.data());
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
 
+        /*
         // Update observation vector (ManiSkill)
         mlpInterface_.update_observation_ManiSkill(pos.head(19), vel.head(19), tau.head(19), rpy,
                                                    quatPermut * ori, gyro, cmd_, time_run_);
 
         // Inference to get position targets from the policy (ManiSkill)
         policy_out_ = mlpInterface_.forward_ManiSkill();
+        */
 
-        /*
         // Update observation vector (Mujoco)
-        mlpInterface_.update_observation_with_clock(pos.head(19), vel.head(19), tau.head(19), rpy,
-                                                    quatPermut * ori,  gyro, cmd_, 0.5 + time_run_);
+        // mlpInterface_.update_observation_with_clock(pos.head(19), vel.head(19), tau.head(19), rpy,
+        //                                             quatPermut * ori,  gyro, cmd_, 0.5 + time_run_);
+
+        mlpInterface_.update_full_body_observation(pos.head(19), vel.head(19), rpy, gyro, time_run_);
         
         // Inference to get position targets from the policy (Mujoco)
         policy_out_ = mlpInterface_.forward();
-        */
 
         // Check policy output size
-        assert(policy_out_.rows() == mlpInterface_.get_actDim());
+        //assert(policy_out_.rows() == 10);
+	assert(policy_out_.rows() == mlpInterface_.get_actDim());
 
         // Logging policy output
         for (int i = 0; i < policy_out_.rows(); ++i) {
@@ -247,8 +268,7 @@ public:
         Vxf network_cmd = policy_out_;
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
-          // Discard arm commands for now
-          q_des = i < 10 ? network_cmd(i) : q_init_(i);
+          q_des = i < mlpInterface_.get_actDim() ? network_cmd(i) : q_init_(i);
           motor_command_tmp.kp.at(moti[i]) = kp_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_(i);
           motor_command_tmp.q_ref.at(moti[i]) = q_des;
@@ -262,7 +282,7 @@ public:
         for (int i = 0; i < kNumMotors; ++i) {
           motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
-          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = new_q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
@@ -273,7 +293,7 @@ public:
         for (int i = 0; i < kNumMotors; ++i) {
           motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
-          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = new_q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = tau_ff_(i) * 0.0;
         }
@@ -298,7 +318,7 @@ public:
         for (int i = 0; i < kNumMotors; ++i) {
           motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
           motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
-          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = new_q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
@@ -319,7 +339,7 @@ public:
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
 
-          float q_des = (q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio +
+          float q_des = (new_q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio +
                         ms_tmp_ptr->q.at(moti[i]);
           motor_command_tmp.q_ref.at(moti[i]) = q_des;
         }
@@ -439,6 +459,14 @@ private:
   int status_ = STATUS_INIT;
 
   // Default configuration
+  const Vector20 new_q_init_{
+      // -0.2, -0.05, -0.18, 0.74, -0.51, -0.06, 0.06, -0.48,  1.1, -0.27,
+      0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2,  0.6, -0.4,
+      0.01,
+      // -0.23, 0.18, -1.07, 1.44, -0.13, -0.12, 0.93, 1.42,
+      0.4,  0.0, 0.0, -0.4, 0.4, 0.0,  0.0, -0.4,       // Torso and arms
+      0};
+
   const Vector20 q_init_{
       0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2,  0.6, -0.4, // Legs
       0.0, 0.4,  0.0, 0.0, -0.4, 0.4, 0.0,  0.0, -0.4,       // Torso and arms
@@ -452,16 +480,26 @@ private:
       0.43, 0.43, 2.53, 2.05, 0.52, 0.43, 0.43, 2.53, 2.05, 0.52, // Legs
       2.35, 2.87, 3.11, 4.45, 2.61, 2.87, 0.34, 1.3,  2.61, // Torso and arms
       0.0};                                                 // Unused joint
+  const Vector20 qdot_limit{
+      8, 8, 8, 8, 8,
+      8, 8, 8, 8, 8,  // Legs
+      4,  // Torso
+      12, 12, 12, 12,
+      12, 12, 12, 12, // Arms
+      0 // Unsused joint
+  };
 
   // Proportional derivative gains
   Vector20 kp_{100.0, 100.0, 100.0, 100.0, 20.0,
                100.0, 100.0, 100.0, 100.0, 20.0, // Legs
-               300.0, 100.0, 100.0, 100.0, 100.0,
-               100.0, 100.0, 100.0, 100.0, // Torso and arms
+               40.0, // Torso
+	       20.0, 20.0, 20.0, 20.0,
+               20.0, 20.0, 20.0, 20.0, // Arms
                0.0};                       // Unused joint
 
   Vector20 kd_{10.0, 10.0, 10.0, 10.0, 4.0, 10.0, 10.0, 10.0, 10.0, 4.0, // Legs
-               6.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, // Torso and arms
+               4.0, // Torso
+	       2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, // Arms
                0.0}; 
 
   Vector20 kp_wait_{1500.0, 1500.0, 1500.0, 1500.0, 1500.0,
@@ -479,7 +517,7 @@ private:
                    0.0, 0.0, 0.0,  0.0,   0.0,  0.0, 0.0,  0.0,  0.0,   0.0};
 
   std::array<float, kNumMotors> tau_des_ = {};
-  std::array<float, 10> policy_log_ = {};
+  std::array<float, 19> policy_log_ = {};
 
   Vector6 cmd_ = Vector6::Zero();
 

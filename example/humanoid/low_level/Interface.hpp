@@ -72,6 +72,9 @@ public:
                                      const Vector19 &tau, const Vector3 &rpy,
                                      const Vector4 &ori, const Vector3 &gyro,
                                      const Vector6 &cmd, float time);
+  void update_full_body_observation(const Vector19 &pos, const Vector19 &vel,
+				    const Vector3 &rpy, const Vector3 &gyro,
+				    float time);
   void update_observation_ManiSkill(const Vector19 &pos, const Vector19 &vel,
                                     const Vector19 &tau, const Vector3 &rpy,
                                     const Vector4 &ori, const Vector3 &gyro,
@@ -245,13 +248,40 @@ void Interface::update_observation_with_clock(
           tau.head(10),
           std::sin(phase),
           std::cos(phase),
-          0, 1, 0, 0, 0, 0;
+          cmd;
   assert(obs_.rows() == obsDim_);
 
   // Iteration counter
   iter_++;
 }
 
+void Interface::update_full_body_observation(
+    const Vector19 &pos, const Vector19 &vel,
+    const Vector3 &rpy, const Vector3 &gyro,
+    float time) {
+  // Log time
+  t_start_ = std::chrono::steady_clock::now();
+
+  const float total_duration = 8.33333;
+  float phase = 2 * pi_v * (time / total_duration);
+
+  float roll = rpy(0);
+  float pitch = rpy(1);
+  Vector3 base_ang_vel = gyro;
+
+  // Filling observation vector
+  obs_ << roll,
+          pitch,
+          base_ang_vel,
+          pos,
+          vel,
+          std::sin(phase),
+          std::cos(phase),
+  assert(obs_.rows() == obsDim_);
+
+  // Iteration counter
+  iter_++;
+}
 void Interface::update_observation(const Vector19 &pos, const Vector19 &vel,
                                    const Vector19 &tau, const Vector3 &rpy,
                                    const Vector4 &ori, const Vector3 &gyro,
