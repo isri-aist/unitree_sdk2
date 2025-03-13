@@ -331,9 +331,11 @@ Vector19 Interface::reorder_obs(const Vector19 &v) {
 Vxf Interface::reorder_act(const Vxf &v) {
 
   // From ManiSkill order to URDF order
-  Vxf out = Vxf::Zero(10);
-  int idx[10] = {0, 3, 7, 11, 15, 1, 4, 8, 12, 16};
-  for (int i = 0; i < 10; i++) {
+  Vxf out = Vxf::Zero(19);
+  int idx[19] = {0, 3, 7, 11, 15, 1, 4, 8, 12, 16, // Legs
+                 2, // Torso
+                 5, 9, 13, 17, 6, 10, 14, 18};  // Arms
+  for (int i = 0; i < 19; i++) {
     out[i] = v[idx[i]];
   }
   return out;
