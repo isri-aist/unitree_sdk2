@@ -363,19 +363,26 @@ void Interface::update_observation_ManiSkill(
   t_start_ = std::chrono::steady_clock::now();
 
   // Projected gravity based on orientation state
-  _bodyQuat = ori;
-  transformBodyQuat(); // this update _bodyOri
-  Vector3 projected_gravity = _bodyOri;
+  // _bodyQuat = ori;
+  // transformBodyQuat(); // this update _bodyOri
+  // Vector3 projected_gravity = _bodyOri;
+
+  float roll = rpy(0);
+  float pitch = rpy(1);
 
   Vector3 base_ang_vel = gyro;
 
   // Filling observation vector
-  obs_ << projected_gravity,
+  obs_ << base_ang_vel,
+          roll,
+          pitch,
           reorder_obs(pos),
           reorder_obs(vel),
           actions_,
-          base_ang_vel,
-          Vxf::Zero(47); // Discarded priv obs
+          cmd(0),
+          cmd(1),
+          cmd(5),
+          Vxf::Zero(319); // Unused by actor
   assert(obs_.rows() == obsDim_);
 
   // Iteration counter
