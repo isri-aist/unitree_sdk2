@@ -84,7 +84,7 @@ public:
     }
 
     // Create link with network interface
-    mlpInterface_.initialize(model_file, q_init_.head(10), control_dt_);
+    mlpInterface_.initialize(model_file, q_init_.head(19), control_dt_);
     policy_out_ = Vxf::Zero(mlpInterface_.get_actDim());
 
     // Initialize tables for console display
@@ -247,8 +247,7 @@ public:
         Vxf network_cmd = policy_out_;
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
-          // Discard arm commands for now
-          q_des = i < 10 ? network_cmd(i) : q_init_(i);
+          q_des = i < mlpInterface_.get_actDim() ? network_cmd(i) : q_init_(i);
           motor_command_tmp.kp.at(moti[i]) = kp_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_(i);
           motor_command_tmp.q_ref.at(moti[i]) = q_des;
@@ -479,7 +478,7 @@ private:
                    0.0, 0.0, 0.0,  0.0,   0.0,  0.0, 0.0,  0.0,  0.0,   0.0};
 
   std::array<float, kNumMotors> tau_des_ = {};
-  std::array<float, 10> policy_log_ = {};
+  std::array<float, 19> policy_log_ = {};
 
   Vector6 cmd_ = Vector6::Zero();
 
