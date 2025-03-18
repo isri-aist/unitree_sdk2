@@ -40,6 +40,7 @@ static const std::string kTopicLowState = "rt/lowstate";
 
 class HumanoidExample;
 void waiting(HumanoidExample *HE);
+void NATNET_CALLCONV dataCallback(sFrameOfMocapData* data, void* pUserData);
 
 class HumanoidExample {
 public:
@@ -50,37 +51,25 @@ public:
     std::cout << "Initialize channel factory." << std::endl;
 
     // connect with mocap
-    // NatNetクライアントの作成
-    NatNetClient client;
-
     // サーバーへの接続パラメータ設定
     sNatNetClientConnectParams connectParams;
-    connectParams.serverAddress = "150.18.226.11";
+    //connectParams.serverAddress = "150.18.226.11";
+    connectParams.serverAddress = "192.168.123.11";
     connectParams.localAddress = "0.0.0.0";  // ローカルのすべてのネットワークインターフェースを使用
     connectParams.connectionType = ConnectionType_Multicast;
     connectParams.serverDataPort = 1511;
 
     // サーバーに接続
-    ErrorCode ret = client.Connect(connectParams);
+    ErrorCode ret = mocapClient_.Connect(connectParams);
     if (ret != ErrorCode_OK)
     {
-      std::cout << "接続に失敗しました。エラーコード: " << ret << std::endl;
+      std::cerr << "[MOCAP] 接続に失敗しました。エラーコード: " << ret << std::endl;
     }
-
-    // データ受信コールバックの設定
-    client.SetFrameReceivedCallback(HumanoidExample::dataCallback, nullptr);
-
-    std::cout << "モーションキャプチャデータの受信を開始しました。Ctrl+Cで終了します。" << std::endl;
-
-    // // メインループ
-    // while (true)
-    // {
-    //     // 1秒ごとにスリープ
-    //     this_thread::sleep_for(chrono::seconds(1));
-    // }
-
-    // 切断（ここには到達しないが、適切な終了処理の例として）
-    //client.Disconnect();
+    else
+    {
+      std::cout << "[MOCAP] Connected to NatNet server." << std::endl;
+      mocapClient_.SetFrameReceivedCallback(dataCallback, this);
+    }
 
     lowcmd_publisher_.reset(
         new unitree::robot::ChannelPublisher<unitree_go::msg::dds_::LowCmd_>(
@@ -422,6 +411,19 @@ public:
   ////////////////////////////////////////////////////////////////////////////////////////////////
   void endWaiting();
 
+  // mocap stuff
+  // NatNetクライアントの作成
+  NatNetClient mocapClient_;
+  std::mutex mocapMutex_;
+
+  struct MocapRigidBodyData {
+    int id;
+    float x, y, z;
+    float qx, qy, qz, qw;
+  };
+  std::unordered_map<int, MocapRigidBodyData> latestRigidBodies_;
+
+
 private:
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -431,9 +433,6 @@ private:
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
   void UpdateTables(bool init = false);
-
-  // Callback for mocap
-  static void dataCallback(sFrameOfMocapData* data, void* pUserData);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -581,7 +580,6 @@ private:
   unitree::common::ThreadPtr command_writer_ptr_;
   unitree::common::ThreadPtr control_thread_ptr_;
   unitree::common::ThreadPtr report_sensors_ptr_;
-  unitree::common::ThreadPtr mocap_thread_ptr_;
 
   // Table for console display
   fort::char_table table_IMU_;
@@ -743,28 +741,6 @@ void HumanoidExample::ReportSensors() {
     }
     std::cout << "]" << std::endl;
   }
-}
-
-// コールバック関数
-void NATNET_CALLCONV HumanoidExample::dataCallback(sFrameOfMocapData* data, void* pUserData)
-{
-  // リジッドボディの情報を表示
-  std::cout << "Frame: " << data->iFrame << std::endl;
-  std::cout << "Rigid Bodies: " << data->nRigidBodies << std::endl;
-  for (int i = 0; i < data->nRigidBodies; i++)
-  {
-      std::cout << "  ID: " << data->RigidBodies[i].ID << std::endl;
-      std::cout << "  Position: "
-	   << data->RigidBodies[i].x << ", "
-	   << data->RigidBodies[i].y << ", "
-	   << data->RigidBodies[i].z << std::endl;
-      std::cout << "  Orientation: "
-	   << data->RigidBodies[i].qx << ", "
-	   << data->RigidBodies[i].qy << ", "
-	   << data->RigidBodies[i].qz << ", "
-	   << data->RigidBodies[i].qw << std::endl;
-  }
-  std::cout << "----------------------------------------" << std::endl;
 }
 
 void HumanoidExample::UpdateTables(bool init) {
@@ -992,4 +968,27 @@ void HumanoidExample::transformBodyQuat(Vector4 _bodyQuat) {
   _qb = _qvec.cross(_gravityVec) * q_w * 2.0;
   _qc = _qvec * (_qvec.transpose() * _gravityVec) * 2.0;
   _bodyOri = _qa - _qb + _qc;
+}
+
+// コールバック関数
+void NATNET_CALLCONV dataCallback(sFrameOfMocapData* data, void* pUserData)
+{
+  auto* instance = static_cast<HumanoidExample*>(pUserData);
+  if(!instance) return;
+
+  std::lock_guard<std::mutex> lock(instance->mocapMutex_);
+  instance->latestRigidBodies_.clear();
+
+  // リジッドボディの情報を表示
+  std::cout << "Frame: " << data->iFrame << std::endl;
+  std::cout << "Rigid Bodies: " << data->nRigidBodies << std::endl;
+  for (int i = 0; i < data->nRigidBodies; i++)
+  {
+      const auto& rb = data->RigidBodies[i];
+      HumanoidExample::MocapRigidBodyData rbData =
+      {
+       rb.ID, rb.x, rb.y, rb.z, rb.qx, rb.qy, rb.qz, rb.qw
+      };
+      instance->latestRigidBodies_[rb.ID] = rbData;
+  }
 }
