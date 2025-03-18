@@ -72,7 +72,7 @@ public:
                                      const Vector19 &tau, const Vector3 &rpy,
                                      const Vector4 &ori, const Vector3 &gyro,
                                      const Vector6 &cmd, float time);
-  void update_full_body_observation(const Vector19 &pos, const Vector19 &vel,
+  void update_full_body_observation(const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
 				    const Vector3 &rpy, const Vector3 &gyro,
 				    float time);
   void update_observation_ManiSkill(const Vector19 &pos, const Vector19 &vel,
@@ -256,14 +256,17 @@ void Interface::update_observation_with_clock(
 }
 
 void Interface::update_full_body_observation(
-    const Vector19 &pos, const Vector19 &vel,
+    const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
     const Vector3 &rpy, const Vector3 &gyro,
     float time) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
-  const float total_duration = 8.33333;
-  float phase = 2 * pi_v * (time / total_duration);
+  const float total_duration_mimic = 11.66666;//8.33333;
+  float phi_mimic = 2 * pi_v * (time / total_duration_mimic);
+
+  const float total_duration_gait = 1.00;
+  float phi_gait = 2 * pi_v * (time / total_duration_gait);
 
   float roll = rpy(0);
   float pitch = rpy(1);
@@ -275,8 +278,11 @@ void Interface::update_full_body_observation(
           base_ang_vel,
           pos,
           vel,
-          std::sin(phase),
-          std::cos(phase),
+          tau,
+          std::sin(phi_mimic),
+          std::cos(phi_mimic),
+          std::sin(phi_gait),
+          std::cos(phi_gait),
   assert(obs_.rows() == obsDim_);
 
   // Iteration counter

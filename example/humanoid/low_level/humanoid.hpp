@@ -250,7 +250,7 @@ public:
         // mlpInterface_.update_observation_with_clock(pos.head(19), vel.head(19), tau.head(19), rpy,
         //                                             quatPermut * ori,  gyro, cmd_, 0.5 + time_run_);
 
-        mlpInterface_.update_full_body_observation(pos.head(19), vel.head(19), rpy, gyro, time_run_);
+        mlpInterface_.update_full_body_observation(pos.head(19), vel.head(19), tau.head(19), rpy, gyro, time_run_);
         
         // Inference to get position targets from the policy (Mujoco)
         policy_out_ = mlpInterface_.forward();
