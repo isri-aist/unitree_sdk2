@@ -531,7 +531,7 @@ private:
   float time_ = 0.f;
   float time_run_ = 0.f;
   const float init_duration_ = 5.f;
-  const float interp_duration_ = 1.f;
+  const float interp_duration_ = .1f;
 
   float report_dt_ = 0.1f;
 
