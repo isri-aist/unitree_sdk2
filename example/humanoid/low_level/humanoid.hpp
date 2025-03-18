@@ -157,8 +157,9 @@ public:
       }
 
       // Check if joints are too close from position limits
-      const bool lim_lower = ((pos - 0.85 * q_lim_lower).array() < 0.0).any();
-      const bool lim_upper = ((pos - 0.85 * q_lim_upper).array() > 0.0).any();
+      const float t = 0.95;
+      const bool lim_lower = ((pos - t * q_lim_lower).array() < 0.0).any();
+      const bool lim_upper = ((pos - t * q_lim_upper).array() > 0.0).any();
       if (lim_lower || lim_upper) {
         std::cout << "Joint range threshold breached!!!" << std::endl;
         status_ = STATUS_DAMPING;
