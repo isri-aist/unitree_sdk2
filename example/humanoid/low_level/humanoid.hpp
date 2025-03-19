@@ -980,8 +980,8 @@ void NATNET_CALLCONV dataCallback(sFrameOfMocapData* data, void* pUserData)
   instance->latestRigidBodies_.clear();
 
   // リジッドボディの情報を表示
-  std::cout << "Frame: " << data->iFrame << std::endl;
-  std::cout << "Rigid Bodies: " << data->nRigidBodies << std::endl;
+  // std::cout << "Frame: " << data->iFrame << std::endl;
+  // std::cout << "Rigid Bodies: " << data->nRigidBodies << std::endl;
   for (int i = 0; i < data->nRigidBodies; i++)
   {
       const auto& rb = data->RigidBodies[i];
