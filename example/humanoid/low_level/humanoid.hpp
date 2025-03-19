@@ -341,11 +341,11 @@ public:
       // Log sensors and commands
       for (int i = 0; i < kNumMotors; ++i) {
         tau_des_[i] =
-            motor_command_tmp.kp.at(i) *
-                (motor_command_tmp.q_ref.at(i) - ms_tmp_ptr->q.at(i)) +
-            motor_command_tmp.kd.at(i) *
-                (motor_command_tmp.dq_ref.at(i) - ms_tmp_ptr->dq.at(i)) +
-            motor_command_tmp.tau_ff.at(i);
+            motor_command_tmp.kp.at(moti[i]) *
+                (motor_command_tmp.q_ref.at(moti[i]) - ms_tmp_ptr->q.at(moti[i])) +
+            motor_command_tmp.kd.at(moti[i]) *
+                (motor_command_tmp.dq_ref.at(moti[i]) - ms_tmp_ptr->dq.at(moti[i])) +
+            motor_command_tmp.tau_ff.at(moti[i]);
       }
       LogAll();
     }
