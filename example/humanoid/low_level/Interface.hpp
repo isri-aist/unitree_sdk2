@@ -73,6 +73,7 @@ public:
                                      const Vector4 &ori, const Vector3 &gyro,
                                      const Vector6 &cmd, float time);
   void update_full_body_observation(const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
+				    const Vector3 &obj_pos, const Vector3 &obj_rot0, const Vector3 &obj_rot1,
 				    const Vector3 &rpy, const Vector3 &gyro,
 				    float time);
   void update_observation_ManiSkill(const Vector19 &pos, const Vector19 &vel,
@@ -257,6 +258,7 @@ void Interface::update_observation_with_clock(
 
 void Interface::update_full_body_observation(
     const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
+    const Vector3 &obj_pos, const Vector3 &obj_rot0, const Vector3 &obj_rot1,
     const Vector3 &rpy, const Vector3 &gyro,
     float time) {
   // Log time
@@ -267,6 +269,13 @@ void Interface::update_full_body_observation(
 
   const float total_duration_gait = 1.00;
   float phi_gait = 2 * pi_v * (time / total_duration_gait);
+
+  // safely end the episode
+  if ((time / total_duration_mimic) > 0.9)
+  {
+    phi_mimic = 2 * pi_v * (0.9);
+    phi_gait = 0;
+  }
 
   float roll = rpy(0);
   float pitch = rpy(1);
@@ -283,6 +292,9 @@ void Interface::update_full_body_observation(
           std::cos(phi_mimic),
           std::sin(phi_gait),
           std::cos(phi_gait),
+          obj_pos,
+          obj_rot0,
+          obj_rot1;
   assert(obs_.rows() == obsDim_);
 
   // Iteration counter

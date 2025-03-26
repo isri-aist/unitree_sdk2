@@ -275,7 +275,30 @@ public:
         // mlpInterface_.update_observation_with_clock(pos.head(19), vel.head(19), tau.head(19), rpy,
         //                                             quatPermut * ori,  gyro, cmd_, 0.5 + time_run_);
 
-        mlpInterface_.update_full_body_observation(pos.head(19), vel.head(19), tau.head(19), rpy, gyro, time_run_);
+        // compute pose of box in base frame here
+        const auto& torso = latestRigidBodies_[2]; // streaming-id of torso
+        const auto& box = latestRigidBodies_[5]; // streaming-id of box
+        robot_pose.position = Eigen::Vector3d(torso.x, torso.y, torso.z);
+        robot_pose.orientation = Eigen::Quaterniond(torso.qw, torso.qx, torso.qy, torso.qz);
+        object_pose.position = Eigen::Vector3d(box.x, box.y, box.z);
+        object_pose.orientation = Eigen::Quaterniond(box.qw, box.qx, box.qy, box.qz);
+        Eigen::Quaterniond q_robot_inv = robot_pose.orientation.inverse();
+        Eigen::Vector3d obj_in_robot_pos = q_robot_inv * (object_pose.position - robot_pose.position);
+        Eigen::Quaterniond obj_in_robot_ori = q_robot_inv * object_pose.orientation;
+        double theta = pos[10]; // torso yaw angle
+        Eigen::AngleAxisd yaw_rot(theta, Eigen::Vector3d::UnitZ());
+        Eigen::Quaterniond q_robot_to_base = Eigen::Quaterniond(yaw_rot);
+        Eigen::Vector3d t_robot_to_base(0, 0, 0.48); // rough guess of torso to base translation
+        Eigen::Vector3d obj_in_base_pos = q_robot_to_base * obj_in_robot_pos + t_robot_to_base;
+        Eigen::Quaterniond obj_in_base_ori = q_robot_to_base * obj_in_robot_ori;
+        Eigen::Matrix3d R_obj_in_base = obj_in_base_ori.toRotationMatrix();
+        Vector3 _obj_in_base_pos = obj_in_base_pos.cast<float>();
+        Vector3 obj_in_base_rot0 = R_obj_in_base.row(0).cast<float>();
+        Vector3 obj_in_base_rot1 = R_obj_in_base.row(1).cast<float>();
+        mlpInterface_.update_full_body_observation(pos.head(19), vel.head(19), tau.head(19),
+                                                   _obj_in_base_pos, obj_in_base_rot0, obj_in_base_rot1,
+                                                   rpy, gyro,
+                                                   time_run_);
         
         // Inference to get position targets from the policy (Mujoco)
         policy_out_ = mlpInterface_.forward();
@@ -421,7 +444,13 @@ public:
     float x, y, z;
     float qx, qy, qz, qw;
   };
+  struct RigidBodyPose {
+    Eigen::Vector3d position;
+    Eigen::Quaterniond orientation;
+  };
+
   std::unordered_map<int, MocapRigidBodyData> latestRigidBodies_;
+  RigidBodyPose robot_pose, object_pose;
 
 
 private:
