@@ -275,26 +275,56 @@ public:
         // mlpInterface_.update_observation_with_clock(pos.head(19), vel.head(19), tau.head(19), rpy,
         //                                             quatPermut * ori,  gyro, cmd_, 0.5 + time_run_);
 
+	// method to transform pose from robot frame to base frame
+	auto transform_to_base = [&](const RigidBodyPose & robot_pose,
+				     const RigidBodyPose & object_pose,
+				     Eigen::Vector3d & local_pos,
+				     Eigen::Matrix3d & local_rot)
+	{
+	  Eigen::Quaterniond q_robot_inv = robot_pose.orientation.inverse();
+	  Eigen::Vector3d obj_in_robot_pos = q_robot_inv * (object_pose.position - robot_pose.position);
+	  Eigen::Quaterniond obj_in_robot_ori = q_robot_inv * object_pose.orientation;
+	  double theta = pos[10]; // torso yaw angle
+	  Eigen::AngleAxisd yaw_rot(theta, Eigen::Vector3d::UnitZ());
+	  Eigen::Quaterniond q_robot_to_base = Eigen::Quaterniond(yaw_rot);
+	  Eigen::Vector3d t_robot_to_base(0, 0, 0.48); // rough guess of torso to base translation
+	  Eigen::Vector3d obj_in_base_pos = q_robot_to_base * obj_in_robot_pos + t_robot_to_base;
+	  Eigen::Quaterniond obj_in_base_ori = q_robot_to_base * obj_in_robot_ori;
+	  local_pos = obj_in_base_pos;
+	  local_rot = obj_in_base_ori.toRotationMatrix();
+	};
+
         // compute pose of box in base frame here
         const auto& torso = latestRigidBodies_[2]; // streaming-id of torso
         const auto& box = latestRigidBodies_[5]; // streaming-id of box
+        const auto& table2 = latestRigidBodies_[4]; // streaming-id of table2
         robot_pose.position = Eigen::Vector3d(torso.x, torso.y, torso.z);
         robot_pose.orientation = Eigen::Quaterniond(torso.qw, torso.qx, torso.qy, torso.qz);
-        object_pose.position = Eigen::Vector3d(box.x, box.y, box.z);
-        object_pose.orientation = Eigen::Quaterniond(box.qw, box.qx, box.qy, box.qz);
-        Eigen::Quaterniond q_robot_inv = robot_pose.orientation.inverse();
-        Eigen::Vector3d obj_in_robot_pos = q_robot_inv * (object_pose.position - robot_pose.position);
-        Eigen::Quaterniond obj_in_robot_ori = q_robot_inv * object_pose.orientation;
-        double theta = pos[10]; // torso yaw angle
-        Eigen::AngleAxisd yaw_rot(theta, Eigen::Vector3d::UnitZ());
-        Eigen::Quaterniond q_robot_to_base = Eigen::Quaterniond(yaw_rot);
-        Eigen::Vector3d t_robot_to_base(0, 0, 0.48); // rough guess of torso to base translation
-        Eigen::Vector3d obj_in_base_pos = q_robot_to_base * obj_in_robot_pos + t_robot_to_base;
-        Eigen::Quaterniond obj_in_base_ori = q_robot_to_base * obj_in_robot_ori;
-        Eigen::Matrix3d R_obj_in_base = obj_in_base_ori.toRotationMatrix();
-        Vector3 _obj_in_base_pos = obj_in_base_pos.cast<float>();
-        Vector3 obj_in_base_rot0 = R_obj_in_base.row(0).cast<float>();
-        Vector3 obj_in_base_rot1 = R_obj_in_base.row(1).cast<float>();
+        box_pose.position = Eigen::Vector3d(box.x, box.y, box.z);
+        box_pose.orientation = Eigen::Quaterniond(box.qw, box.qx, box.qy, box.qz);
+        table_pose.position = Eigen::Vector3d(table2.x, table2.y, table2.z);
+        table_pose.orientation = Eigen::Quaterniond(table2.qw, table2.qx, table2.qy, table2.qz);
+
+	Eigen::Vector3d box_in_base_pos, table_in_base_pos;
+	Eigen::Matrix3d box_in_base_rot, table_in_base_rot;
+	transform_to_base(robot_pose, box_pose, box_in_base_pos, box_in_base_rot);
+	transform_to_base(robot_pose, table_pose, table_in_base_pos, table_in_base_rot);
+
+	Vector3 _obj_in_base_pos, obj_in_base_rot0, obj_in_base_rot1;
+	bool observe_box = true;
+	if (observe_box)
+	{
+	  _obj_in_base_pos = box_in_base_pos.cast<float>();
+	  obj_in_base_rot0 = box_in_base_rot.row(0).cast<float>();
+	  obj_in_base_rot1 = box_in_base_rot.row(1).cast<float>();
+	}
+	else
+	{
+	  _obj_in_base_pos = table_in_base_pos.cast<float>();
+	  obj_in_base_rot0 = table_in_base_rot.row(0).cast<float>();
+	  obj_in_base_rot1 = table_in_base_rot.row(1).cast<float>();
+	}
+
         mlpInterface_.update_full_body_observation(pos.head(19), vel.head(19), tau.head(19),
                                                    _obj_in_base_pos, obj_in_base_rot0, obj_in_base_rot1,
                                                    rpy, gyro,
@@ -450,7 +480,7 @@ public:
   };
 
   std::unordered_map<int, MocapRigidBodyData> latestRigidBodies_;
-  RigidBodyPose robot_pose, object_pose;
+  RigidBodyPose robot_pose, box_pose, table_pose;
 
 
 private:
