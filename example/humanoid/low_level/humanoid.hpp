@@ -108,7 +108,7 @@ public:
     }
 
     // Create link with network interface
-    mlpInterface_.initialize(model_file, q_init_.head(19), control_dt_);
+    mlpInterface_.initialize(model_file, q_offsets_.head(19), control_dt_);
     policy_out_ = Vxf::Zero(mlpInterface_.get_actDim());
 
     // Initialize tables for console display
@@ -330,7 +330,7 @@ public:
         for (int i = 0; i < kNumMotors; ++i) {
           motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
-          motor_command_tmp.q_ref.at(moti[i]) = new_q_init_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
@@ -341,7 +341,7 @@ public:
         for (int i = 0; i < kNumMotors; ++i) {
           motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
           motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
-          motor_command_tmp.q_ref.at(moti[i]) = new_q_init_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = tau_ff_(i) * 0.0;
         }
@@ -366,7 +366,7 @@ public:
         for (int i = 0; i < kNumMotors; ++i) {
           motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
           motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
-          motor_command_tmp.q_ref.at(moti[i]) = new_q_init_(i);
+          motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
@@ -387,7 +387,7 @@ public:
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
 
-          float q_des = (new_q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio +
+          float q_des = (q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio +
                         ms_tmp_ptr->q.at(moti[i]);
           motor_command_tmp.q_ref.at(moti[i]) = q_des;
         }
@@ -527,20 +527,20 @@ private:
 
   // Default configuration
   // for walk and pickup
-  const Vector20 new_q_init_{
+  const Vector20 q_init_{
       0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2,  0.6, -0.4,
       0.01,
       -0.23, 0.18, -1.07, 1.44, -0.13, -0.12, 0.93, 1.42,
       0};
 
   // for box carry
-  // const Vector20 new_q_init_{
+  // const Vector20 q_init_{
   //     0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2,  0.6, -0.4,
   //     0.,
   //     0.16, 0.0, -0.2, 0.06, 0.16, 0.0, 0.2, 0.06,
   //     0};
 
-  const Vector20 q_init_{
+  const Vector20 q_offsets_{
       0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2,  0.6, -0.4, // Legs
       0.0, 0.4,  0.0, 0.0, -0.4, 0.4, 0.0,  0.0, -0.4,       // Torso and arms
       0.0};                                                  // Unused joint
