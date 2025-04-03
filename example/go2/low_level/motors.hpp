@@ -5,7 +5,7 @@
 
 #include <unitree/idl/go2/LowCmd_.hpp>
 
-constexpr int kNumMotors = 20;
+constexpr int kNumMotors = 12;
 
 struct MotorCommand {
   std::array<float, kNumMotors> q_ref = {};
@@ -22,34 +22,18 @@ struct MotorState {
 };
 
 enum JointIndex {
-  // Right leg
-  kRightHipYaw = 8,
-  kRightHipRoll = 0,
-  kRightHipPitch = 1,
-  kRightKnee = 2,
-  kRightAnkle = 11,
-  // Left leg
-  kLeftHipYaw = 7,
-  kLeftHipRoll = 3,
-  kLeftHipPitch = 4,
-  kLeftKnee = 5,
-  kLeftAnkle = 10,
-
-  kWaistYaw = 6,
-
-  kNotUsedJoint = 9,
-
-  // Right arm
-  kRightShoulderPitch = 12,
-  kRightShoulderRoll = 13,
-  kRightShoulderYaw = 14,
-  kRightElbow = 15,
-  // Left arm
-  kLeftShoulderPitch = 16,
-  kLeftShoulderRoll = 17,
-  kLeftShoulderYaw = 18,
-  kLeftElbow = 19,
-
+  FL_hip_joint = 0,
+  FL_thigh_joint = 1,
+  FL_calf_joint = 2,
+  FR_hip_joint = 3,
+  FR_thigh_joint = 4,
+  FR_calf_joint = 5,
+  RL_hip_joint = 6,
+  RL_thigh_joint = 7,
+  RL_calf_joint = 8,
+  RR_hip_joint = 9,
+  RR_thigh_joint = 10,
+  RR_calf_joint = 11
 };
 
 uint32_t Crc32Core(uint32_t *ptr, uint32_t len);
