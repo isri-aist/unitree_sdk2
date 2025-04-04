@@ -154,12 +154,12 @@ class Joystick {
   Matrix6N v_switch;  // Target velocity for the key frames
 
   // How much the gamepad velocity and position is filtered to avoid sharp changes
-  const double gp_alpha_vel = 0.05;  // Low pass filter coefficient for v_ref_ (if gamepad-controlled)
+  const double gp_alpha_vel = 0.2;  // Low pass filter coefficient for v_ref_ (if gamepad-controlled)
 
   // Maximum velocity values
-  const double vXScale = 0.15;   // Lateral
-  const double vYScale = 0.15;   // Forward
-  const double vYawScale = 0.3;  // Rotation
+  const double vXScale = 0.5;   // Lateral
+  const double vYScale = 0.5;   // Forward
+  const double vYawScale = 0.5;  // Rotation
 
   // Gamepad client variables
   struct gamepad_struct gamepad;  // Structure that stores gamepad status
