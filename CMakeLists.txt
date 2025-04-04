@@ -64,7 +64,7 @@ target_include_directories(unitree_sdk2 INTERFACE
 target_link_libraries(unitree_sdk2 INTERFACE fmt)
 target_include_directories(unitree_sdk2 INTERFACE fmtlog)
 target_include_directories(unitree_sdk2 INTERFACE libfort)
-target_include_directories(unitree_sdk2 INTERFACE /home/paleziart/install/include)
+target_include_directories(unitree_sdk2 INTERFACE /home/h1user/paleziart/install/include)
 
 #### ONNX RUNTIME
 
@@ -72,7 +72,7 @@ option(onnxruntime_USE_CUDA "Build with CUDA support" OFF)
 option(onnxruntime_USE_TENSORRT "Build with TensorRT support" OFF)
 include(FetchContent)
 
-set(ONNXRUNTIME_ROOTDIR "/home/paleziart/git/test_onnx/mini/onnxruntime")
+set(ONNXRUNTIME_ROOTDIR "/home/h1user/paleziart/onnxruntime")
 
 # The ORT package has a different include directory structure to a local install via cmake.
 # We added the path for the pre-built package above. Add the path for a local install to support either usage.
