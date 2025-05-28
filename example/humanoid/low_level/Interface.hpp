@@ -75,7 +75,7 @@ public:
   void update_observation_ManiSkill(const Vector19 &pos, const Vector19 &vel,
                                     const Vector19 &tau, const Vector3 &rpy,
                                     const Vector4 &ori, const Vector3 &gyro,
-                                    const Vector6 &cmd, float time);
+                                    const Vector6 &cmd, float time, float loco_mode);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -132,7 +132,7 @@ public:
   Vector3 vel_command_ = Vector3::Zero();
   Vxf pTarget_, q_ref_, obs_, actorObs_, studentObs_, historyObs_,
       historyTempObs_, latentOut_, actions_;
-  Mxf last_actions_; // , last_dof_pos_, last_dof_vel_;
+  Vxf last_actions_; // , last_dof_pos_, last_dof_vel_;
   int obsDim_, actDim_, historyLength_, historySamples_, historyStep_, iter_;
   float dt_;
   std::chrono::time_point<std::chrono::steady_clock> t_start_;
@@ -346,10 +346,34 @@ Vxf Interface::forward_ManiSkill() {
   // Compute policy actions
   actions_ = policy_->run(obs_);
 
+  // Force torso to 0
+  /*actions_[2] = 0.0;
+  for (int i = 10; i < policy_out_.rows(); ++i) {
+    actions_[i] = 0.0;
+  }*/
+
+  // Force torso and arms to 0
+  std::array<int, 9> idx = {2, 5, 6, 9, 10, 13, 14, 17, 18};
+  for (size_t i = 0; i < idx.size(); ++i) {
+    actions_[idx[i]] = 0.0;
+  }
+  actions_[2] = 0.0;
+
+  // Force arms to 0 except pitch
+  /* actions_[9] = 0.0;
+  actions_[10] = 0.0;
+  actions_[13] = 0.0;
+  actions_[14] = 0.0;
+  actions_[17] = 0.0;
+  actions_[18] = 0.0; */
+
   // Target joint positions based on scaled actions
   assert(q_ref_.rows() == reorder_act(actions_).rows());
-  pTarget_ = q_ref_ + 1.0 * reorder_act(actions_);
+  pTarget_ = q_ref_ + 0.75 * reorder_act(actions_) + 0.25 * last_actions_ ;
+
   assert(pTarget_.rows() == q_ref_.rows());
+
+  last_actions_.col(0) = reorder_act(actions_);
 
   // Log time
   t_end_ = std::chrono::steady_clock::now();
@@ -360,7 +384,7 @@ Vxf Interface::forward_ManiSkill() {
 void Interface::update_observation_ManiSkill(
     const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
     const Vector3 &rpy, const Vector4 &ori, const Vector3 &gyro,
-    const Vector6 &cmd, float time) {
+    const Vector6 &cmd, float time, float loco_mode) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
@@ -372,20 +396,60 @@ void Interface::update_observation_ManiSkill(
   float roll = rpy(0);
   float pitch = rpy(1);
 
+  float phase = 2 * pi_v * 1.2 * time;
+
   Vector3 base_ang_vel = gyro;
 
+  
+  Vector10 pos_lower, vel_lower, act_lower;
+  Vector19 reordered_pos = reorder_obs(pos);
+  Vector19 reordered_vel = reorder_obs(vel);
+
+  std::array<int, 10> idx = {0, 1, 3, 4, 7, 8, 11, 12, 15, 16};
+  for (size_t i = 0; i < idx.size(); ++i) {
+    pos_lower[i] = reordered_pos[idx[i]];
+    vel_lower[i] = reordered_vel[idx[i]];
+    act_lower[i] = actions_[idx[i]];
+  }
+
   // Filling observation vector
-  obs_ << base_ang_vel,
+  obs_ << -base_ang_vel(0),
+          -base_ang_vel(1),
+          base_ang_vel(2),
           roll,
           pitch,
-          reorder_obs(pos),
+          pos_lower,
+          vel_lower,
+          act_lower,
+          /*reorder_obs(pos),
           reorder_obs(vel),
-          actions_,
+          actions_,*/
+          loco_mode,
           cmd(0),
           cmd(1),
           cmd(5),
-          Vxf::Zero(319); // Unused by actor
+          std::cos(phase),
+          std::sin(phase),
+          Vxf::Zero(4); // Unused by actor but was there for critic
+          //Vxf::Zero(319); // Unused by actor
+
   assert(obs_.rows() == obsDim_);
+
+  /*std::cout << "== " << time << " ==" << std::endl;
+  std::cout << obs_.transpose() << std::endl;
+  std::cout << "== " << std::endl;
+  std::cout << base_ang_vel.transpose() << std::endl;
+  std::cout << roll << std::endl;
+  std::cout << pitch << std::endl;
+  std::cout << reorder_obs(pos).transpose() << std::endl;
+  std::cout << reorder_obs(vel).transpose() << std::endl;
+  std::cout << actions_.transpose() << std::endl;
+  std::cout << cmd(0) << std::endl;
+  std::cout << cmd(1) << std::endl;
+  std::cout << cmd(5) << std::endl;
+  std::cout << std::cos(phase) << std::endl;
+  std::cout << std::sin(phase) << std::endl;
+  std::cout << "== == == ==" << std::endl;*/
 
   // Iteration counter
   iter_++;
