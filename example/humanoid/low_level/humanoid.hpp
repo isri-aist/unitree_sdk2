@@ -24,7 +24,7 @@
 #include "logger.hpp"
 #include "motors.hpp"
 
-#define USE_JOYSTICK false
+#define USE_JOYSTICK true
 
 #define STATUS_INIT 0
 #define STATUS_WAITING_AIR 1
@@ -73,7 +73,7 @@ public:
         &HumanoidExample::UpdateTables, this, false);
 
     // Scale the policy control gains
-    // kp_ *= 0.0;
+    kp_ *= 1.0;
     // kd_ *= 0.0;
     // kp_wait_ *= 0.0;
     // kd_wait_ *= 0.0;
@@ -82,6 +82,16 @@ public:
     if (USE_JOYSTICK) {
       joy_.initialize(control_dt_);
     }
+
+    int joystick_period_us = 0.001 * 1e6;
+    joystick_thread_ptr_ = unitree::common::CreateRecurrentThreadEx(
+        "joystick", UT_CPU_ID_NONE, joystick_period_us, &HumanoidExample::ReadJoystick,
+        this);
+
+    int logging_period_us = 0.002 * 1e6;
+    logging_thread_ptr_ = unitree::common::CreateRecurrentThreadEx(
+        "logging", UT_CPU_ID_NONE, logging_period_us, &HumanoidExample::LogAll,
+        this);
 
     // Create link with network interface
     mlpInterface_.initialize(model_file, q_init_.head(19), control_dt_);
@@ -137,6 +147,10 @@ public:
   ////////////////////////////////////////////////////////////////////////////////////////////////
   void LowStateHandler(const void *message);
 
+  void ReadJoystick() {
+    joy_.update_v_ref();
+  }
+
   // Take decisions for the next commands and send them to the motor command
   // buffer
   void Control() {
@@ -157,14 +171,18 @@ public:
       }
 
       // Check if joints are too close from position limits
-      const bool lim_lower = ((pos - 0.85 * q_lim_lower).array() < 0.0).any();
-      const bool lim_upper = ((pos - 0.85 * q_lim_upper).array() > 0.0).any();
+      const bool lim_lower = ((pos - 0.95 * q_lim_lower).array() < 0.0).any();
+      const bool lim_upper = ((pos - 0.95 * q_lim_upper).array() > 0.0).any();
       if (lim_lower || lim_upper) {
+        std::cout << "Pos threshold breached!!!" << std::endl;
+        std::cout << "UP : " << std::fixed << std::setprecision(4) << (0.95 * q_lim_upper).transpose() << std::endl;
+        std::cout << "POS: " << std::fixed << std::setprecision(4) << pos.transpose() << std::endl;
+        std::cout << "LOW: " << std::fixed << std::setprecision(4) << (0.95 * q_lim_lower).transpose() << std::endl;
         status_ = STATUS_DAMPING;
       }
 
       // Check if joint velocities are too high
-      const bool lim_velocity = ((vel.array().abs() - 8) > 0.0).any();
+      const bool lim_velocity = ((vel.array().abs() - 12) > 0.0).any();
       if (lim_velocity) {
         std::cout << "Velocity threshold breached!!!" << std::endl;
         std::cout << "VEL: " << std::fixed << std::setprecision(4) << vel.transpose() << std::endl;
@@ -209,19 +227,55 @@ public:
 
         // Refresh joystick
         if (USE_JOYSTICK) {
-          joy_.update_v_ref();
           cmd_ = joy_.getVRef();
+
+          for (int i = 0; i < 6; ++i) {
+            if (std::abs(cmd_(i)) < 0.1) {cmd_(i) = 0.0;}
+          }
+
+          //std::cout << cmd_.transpose() << std::endl;
+          // cmd_ = Vector6::Zero();
+          // cmd_(0) = 0.4;
+
+          /*cmd_ = Vector6::Zero();
+          cmd_(0) = std::min(0.4, 0.4 * time_run_ / 1.0);
+          // cmd_(5) = 0.0;
+          if (time_run_ > 5.0) {cmd_(0) = 0.0; cmd_(5) = 0.0;}*/
+
+          if (joy_.getCross()) {status_ = STATUS_DAMPING;}
+
         } else {
           cmd_ = Vector6::Zero();
+          cmd_(0) = 0.0;
         }
+
+
+        time_nonzero += control_dt_;
+        for (int i = 0; i < 6; ++i) {
+          if (std::abs(cmd_(i)) > 0.1) {time_nonzero = 0.0;}
+        }
+
+        // Get [-0.5, 0.5] modulo of gait cycle
+        float phase = std::fmod(1.2 * time_run_, 1.0);
+        if (phase > 0.5) {phase -= 1.0;}
+
+        // Change gait mode during double support phase
+        if (-0.1 < phase && phase < 0.1) {
+          if (time_nonzero == 0.0) {loco_mode = 0.0;}
+          if (time_nonzero > 2.0) {loco_mode = 1.0;}
+        }
+
+        //std::cout << "LOCO " << loco_mode << std::endl;
 
         Vector3 rpy(bs_tmp_ptr->rpy.data());
         Vector4 ori(bs_tmp_ptr->quat.data());
         Vector3 gyro(bs_tmp_ptr->omega.data());
 
+        // std::cout << rpy.transpose() << std::endl;
+
         // Update observation vector (ManiSkill)
         mlpInterface_.update_observation_ManiSkill(pos.head(19), vel.head(19), tau.head(19), rpy,
-                                                   quatPermut * ori, gyro, cmd_, time_run_);
+                                                   quatPermut * ori, gyro, cmd_, time_run_, loco_mode);
 
         // Inference to get position targets from the policy (ManiSkill)
         policy_out_ = mlpInterface_.forward_ManiSkill();
@@ -243,8 +297,22 @@ public:
           policy_log_[i] = policy_out_[i];
         }
 
+        //std::cout << policy_out_.transpose() << std::endl;
+        /* std::cout << policy_out_.rows() << std::endl;*/
+        //std::cout << "ActDim: " << mlpInterface_.get_actDim() << std::endl;
+
         // Send policy commands to the robot
         Vxf network_cmd = policy_out_;
+
+        /*
+        network_cmd = q_init_;
+        float pulse = std::fmod(time_run_, 2.0);
+        float offset = 0.0;
+        if (pulse > 1.0) {offset = -0.2;}
+        network_cmd(1) = q_init_(1) + offset;
+        network_cmd(6) = q_init_(6) + offset;
+        */
+
         float q_des = 0.f;
         for (int i = 0; i < kNumMotors; ++i) {
           q_des = i < mlpInterface_.get_actDim() ? network_cmd(i) : q_init_(i);
@@ -282,7 +350,6 @@ public:
 
         bool start = true;
         if (USE_JOYSTICK) {
-          joy_.update_v_ref();
           start = (joy_.getStart()==1);
         }
 
@@ -347,7 +414,7 @@ public:
                 (motor_command_tmp.dq_ref.at(moti[i]) - ms_tmp_ptr->dq.at(moti[i])) +
             motor_command_tmp.tau_ff.at(moti[i]);
       }
-      LogAll();
+      // LogAll();
     }
   }
 
@@ -455,13 +522,16 @@ private:
   // Proportional derivative gains
   Vector20 kp_{100.0, 100.0, 100.0, 100.0, 20.0,
                100.0, 100.0, 100.0, 100.0, 20.0, // Legs
-               300.0, 100.0, 100.0, 100.0, 100.0,
+               100.0, 100.0, 100.0, 100.0, 100.0,
                100.0, 100.0, 100.0, 100.0, // Torso and arms
                0.0};                       // Unused joint
 
   Vector20 kd_{10.0, 10.0, 10.0, 10.0, 4.0, 10.0, 10.0, 10.0, 10.0, 4.0, // Legs
-               15.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, // Torso and arms
-               0.0}; 
+               10.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, // Torso and arms
+              0.0}; 
+               /*Vector20 kd_{10.0, 10.0, 10.0, 10.0, 8.0, 10.0, 10.0, 10.0, 10.0, 8.0, // Legs
+               15.0, 8.5, 8.5, 8.5, 8.5, 8.5, 8.5, 8.5, 8.5, // Torso and arms
+               0.0}; */
 
   Vector20 kp_wait_{1500.0, 1500.0, 1500.0, 1500.0, 1500.0,
                     1500.0, 1500.0, 1500.0, 1500.0, 1500.0, // Legs
@@ -491,10 +561,14 @@ private:
 
   float time_ = 0.f;
   float time_run_ = 0.f;
+  float time_log_ = 0.f;
   const float init_duration_ = 5.f;
-  const float interp_duration_ = 1.f;
+  const float interp_duration_ = 0.1f;
 
   float report_dt_ = 0.1f;
+
+  float time_nonzero = 100.0;
+  float loco_mode = 1.0;
 
   // Joystick interface
   Joystick joy_;
@@ -503,6 +577,8 @@ private:
   unitree::common::ThreadPtr command_writer_ptr_;
   unitree::common::ThreadPtr control_thread_ptr_;
   unitree::common::ThreadPtr report_sensors_ptr_;
+  unitree::common::ThreadPtr joystick_thread_ptr_;
+  unitree::common::ThreadPtr logging_thread_ptr_;
 
   // Table for console display
   fort::char_table table_IMU_;
@@ -611,8 +687,10 @@ void HumanoidExample::LogAll() {
   const std::shared_ptr<const BaseState> bs_tmp_ptr =
       base_state_buffer_.GetData();
 
+  time_log_ += 0.002;
+
   // Log all monitored variables
-  logi("time,{}", time_);
+  logi("time,{}", time_log_);
   if (ms_tmp_ptr) {
     logi("{}", *ms_tmp_ptr);
   }
