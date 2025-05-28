@@ -93,9 +93,9 @@ void Joystick::update_v_ref_gamepad(int k) {
         gamepad.v_y = -event.value / 32767.0;
       else if (event.number == 1)
         gamepad.v_x = -event.value / 32767.0;
-      else if (event.number == 3)
+      else if (event.number == 4)
         gamepad.v_z = -event.value / 32767.0;
-      else if (event.number == 2)
+      else if (event.number == 3)
         gamepad.w_yaw = -event.value / 32767.0;
     }
   }
