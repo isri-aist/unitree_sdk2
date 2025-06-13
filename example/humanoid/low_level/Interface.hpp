@@ -399,7 +399,7 @@ void Interface::update_observation_ManiSkill(
   float phase = 2 * pi_v * 1.2 * time;
 
   Vector3 base_ang_vel = gyro;
-
+  base_ang_vel.head(2) *= -1;  // Invert x y to abide by simulation convention
   
   Vector10 pos_lower, vel_lower, act_lower;
   Vector19 reordered_pos = reorder_obs(pos);
