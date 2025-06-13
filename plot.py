@@ -10,7 +10,7 @@ SAVEFIGS = False
 
 import csv
 
-files = glob.glob("fuild/2025-01-*.txt")
+files = glob.glob("build/2025-04-23*.txt")
 files.sort()
 print("-- Plotting ", files[-1])
 datafile = open(files[-1], "r")
@@ -45,7 +45,7 @@ def plot_leg_arm(ys, indices, lgd1, lgd2, lbls, title, yunit, k=False):
     fig, axs = plt.subplots(
         2,
         mod2,
-        figsize=(30, 12),
+        figsize=(15, 6),
         sharex=True,
     )
     for i in range(mod):
@@ -121,25 +121,31 @@ plot_leg_arm(
     " [rad/s]",
 )
 
+moti = [8, 0, 1, 2, 11, 7, 3, 4, 5, 10, 6, 9, 12, 13, 14, 15, 16, 17, 18, 19]
+moti = [1, 2, 3, 6, 7, 8, 10, 5, 0, 11, 9, 4, 12, 13, 14, 15, 16, 17, 18, 19]
+swap = [5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+swap = [8, 0, 1, 2, 11, 7, 3, 4, 5, 10, 6, 16, 17, 18, 19, 12, 13, 14, 15, 9] 
+# TODO swap left right
+
 # Display leg joint torques
 tau_recons = data["kp"] * (data["q_ref"] - data["q"]) - data["kd"] * data["dq"]
 tau_des = data["tau_des"]
 plot_leg_arm(
-    [tau_recons, tau_des, data["tau"]],
-    leg_indices,
+    [tau_des, data["tau"][:, leg_indices]],
+    [i for i in range(10)],
     lgd1_leg,
     lgd2,
-    ["Reconstructed", "Desired", "Measured"],
+    ["Desired", "Measured"],
     "Leg joint torques",
     " [Nm]",
 )
 
 plot_leg_arm(
-    [tau_recons, tau_des, data["tau"]],
+    [tau_des[:,moti], data["tau"]],
     arm_indices,
     lgd1_arm,
     lgd2,
-    ["Reconstructed", "Desired", "Measured"],
+    ["Desired", "Measured"],
     "Arm joint torques",
     " [Nm]",
 )
