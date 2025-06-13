@@ -138,6 +138,12 @@ public:
   std::chrono::time_point<std::chrono::steady_clock> t_start_;
   std::chrono::time_point<std::chrono::steady_clock> t_end_;
 
+  // History quantities
+  const static int N_hist = 3;
+  Eigen::Matrix<float, 3, N_hist> hist_base_ang_vel;
+  Eigen::Matrix<float, 2, N_hist> hist_roll_pitch;
+  Eigen::Matrix<float, 10, N_hist> hist_pos_lower, hist_vel_lower, hist_act_lower;
+
   // Related to leg phases
   Vector2 phases_freq_;
   Eigen::Array<float, 2, 1> phases_;
@@ -148,6 +154,13 @@ public:
 };
 
 Interface::Interface() {
+
+  // Fill history quantities
+  hist_base_ang_vel.fill(0.0);
+  hist_roll_pitch.fill(0.0);
+  hist_pos_lower.fill(0.0);
+  hist_vel_lower.fill(0.0);
+  hist_act_lower.fill(0.0);
 
   // History is not used for now so we can hardcode 1s
   historySamples_ = 1;
@@ -412,25 +425,50 @@ void Interface::update_observation_ManiSkill(
     act_lower[i] = actions_[idx[i]];
   }
 
+  // Roll history
+  for (int i = hist_base_ang_vel.cols() - 1; i > 0; i--) {
+    hist_base_ang_vel.col(i) = hist_base_ang_vel.col(i - 1);
+    hist_roll_pitch.col(i) = hist_roll_pitch.col(i - 1);
+    hist_pos_lower.col(i) = hist_pos_lower.col(i - 1);
+    hist_vel_lower.col(i) = hist_vel_lower.col(i - 1);
+    hist_act_lower.col(i) = hist_act_lower.col(i - 1);
+  }
+  hist_base_ang_vel.col(0) = base_ang_vel;
+  hist_roll_pitch.col(0) = Vector2(roll, pitch);
+  hist_pos_lower.col(0) = pos_lower;
+  hist_vel_lower.col(0) = vel_lower;
+  hist_act_lower.col(0) = act_lower;
+
+  // TODO: Flatten with Map<VectorXf> v1(M1.data(), M1.size());
+  // to reshape into a Vector with all columns flattened.
+
   // Filling observation vector
-  obs_ << -base_ang_vel(0),
-          -base_ang_vel(1),
-          base_ang_vel(2),
-          roll,
-          pitch,
-          pos_lower,
-          vel_lower,
-          act_lower,
+  obs_ << hist_base_ang_vel.col(0),
+          hist_base_ang_vel.col(1),
+          hist_base_ang_vel.col(2),
+          hist_roll_pitch.col(0),
+          hist_roll_pitch.col(1),
+          hist_roll_pitch.col(2),
+          hist_pos_lower.col(0),
+          hist_pos_lower.col(1),
+          hist_pos_lower.col(2),
+          hist_vel_lower.col(0),
+          hist_vel_lower.col(1),
+          hist_vel_lower.col(2),
+          hist_act_lower.col(0),
+          hist_act_lower.col(1),
+          hist_act_lower.col(2),
           /*reorder_obs(pos),
           reorder_obs(vel),
-          actions_,*/
-          loco_mode,
+          actions_,
+          loco_mode,*/
+          std::cos(phase),
+          std::sin(phase),
           cmd(0),
           cmd(1),
           cmd(5),
-          std::cos(phase),
-          std::sin(phase),
-          Vxf::Zero(4); // Unused by actor but was there for critic
+          Vxf::Zero(116);
+          // Vxf::Zero(4); // Unused by actor but was there for critic
           //Vxf::Zero(319); // Unused by actor
 
   assert(obs_.rows() == obsDim_);
