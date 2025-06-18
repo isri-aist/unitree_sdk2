@@ -87,26 +87,24 @@ public:
   ///
   /// \brief Run network inference to get policy actions
   ///
-  /// \param[in] v Vector of observations
+  /// \param[in] vs List of vectors of observations
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vxf run(const Vxf &v);
+  std::vector<Vxf> run(const std::vector<Vxf> &vs);
 
-  int get_obsDim() { return total_number_elements_; }
-  int get_actDim() { return output_shapes_[0]; }
+  int get_obsDim(int i = 0) { return total_numbers_elements_.at(i); }
+  int get_actDim(int i = 0) { return calculate_product(outputs_shapes_.at(0)); }
 
 private:
   std::shared_ptr<Ort::Session> session_; // ONNX Runtime session
 
-  std::vector<std::int64_t> input_shapes_; // Shape of the inputs of the network
-  std::vector<std::int64_t>
-      output_shapes_; // Shape of the outputs of the network
+  std::vector<std::vector<std::int64_t>> inputs_shapes_;  // Shapes of the inputs of the network
+  std::vector<std::vector<std::int64_t>> outputs_shapes_;  // Shapes of the outputs of the network
+  std::vector<std::string> inputs_names_;  // Names of the inputs of the network
+  std::vector<std::string> outputs_names_;  // Names of the outputs of the network
 
-  std::vector<std::string> input_names_;  // Name of the inputs of the network
-  std::vector<std::string> output_names_; // Name of the outputs of the network
-
-  int total_number_elements_; // Total number of elements in the input of the
-                              // network
+  std::vector<int> total_numbers_elements_; // Total number of elements in the inputs of the
+                                            // network
 };
 
 OnnxWrapper::OnnxWrapper(std::basic_string<ORTCHAR_T> model_file) {
@@ -144,87 +142,103 @@ Ort::Value OnnxWrapper::vec_to_tensor(std::vector<T> &data,
 
 void OnnxWrapper::initialize() {
 
+  std::cout << "== Initialize ONNX Wrapper ==" << std::endl;
   // print name/shape of inputs
   Ort::AllocatorWithDefaultOptions allocator;
-  std::cout << "Input Node Name/Shape (" << input_names_.size()
+  std::cout << "Input Node Name/Shape (" << inputs_names_.size()
             << "):" << std::endl;
   for (std::size_t i = 0; i < session_->GetInputCount(); i++) {
-    input_names_.emplace_back(
+    inputs_names_.emplace_back(
         session_->GetInputNameAllocated(i, allocator).get());
-    input_shapes_ =
-        session_->GetInputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
-    std::cout << "\t" << input_names_.at(i) << " : "
-              << print_shape(input_shapes_) << std::endl;
-  }
-  // some models might have negative shape values to indicate dynamic shape,
-  // e.g., for variable batch size.
-  for (auto &s : input_shapes_) {
-    if (s < 0) {
-      s = 1;
+    inputs_shapes_.push_back(
+        session_->GetInputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape());
+    std::cout << "\t" << inputs_names_.at(i) << " : "
+              << print_shape(inputs_shapes_.at(i)) << std::endl;
+
+    // some models might have negative shape values to indicate dynamic shape,
+    // e.g., for variable batch size.
+    for (auto &s : inputs_shapes_.at(i)) {
+      if (s < 0) {
+        s = 1;
+      }
     }
   }
 
   // print name/shape of outputs
-  std::cout << "Output Node Name/Shape (" << output_names_.size()
+  std::cout << "Output Node Name/Shape (" << outputs_names_.size()
             << "):" << std::endl;
   for (std::size_t i = 0; i < session_->GetOutputCount(); i++) {
-    output_names_.emplace_back(
+    outputs_names_.emplace_back(
         session_->GetOutputNameAllocated(i, allocator).get());
-    output_shapes_ =
-        session_->GetOutputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
-    std::cout << "\t" << output_names_.at(i) << " : "
-              << print_shape(output_shapes_) << std::endl;
+    outputs_shapes_.push_back(
+        session_->GetOutputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape());
+    std::cout << "\t" << outputs_names_.at(i) << " : "
+              << print_shape(outputs_shapes_.at(i)) << std::endl;
   }
 
-  // Assume model has 1 input node and 1 output node.
-  assert(input_names_.size() == 1 && output_names_.size() == 1);
+  // Assume model has 2 input nodes at max and 2 output nodes.
+  assert(inputs_names_.size() <= 2 && outputs_names_.size() <= 2);
 
-  // Create a single Ort tensor of random numbers
-  auto input_shape = input_shapes_;
-  total_number_elements_ = calculate_product(input_shape);
+  // Compute total sizes of inputs
+  for (std::size_t i = 0; i < inputs_names_.size(); i++) {
+    total_numbers_elements_.push_back(calculate_product(inputs_shapes_.at(i)));
+  }
 
-  // generate random numbers in the range [0, 255]
-  std::vector<float> input_tensor_values(total_number_elements_);
-  std::generate(input_tensor_values.begin(), input_tensor_values.end(),
+  // Create Ort tensors of random numbers in the range [0, 255]
+  std::cout << "Constructing dummy tensors of random values." << std::endl;
+  std::vector<Ort::Value> inputs_tensors;
+  for (std::size_t i = 0; i < inputs_names_.size(); i++) {
+    std::vector<float> input_tensor_values(total_numbers_elements_.at(i));
+    std::generate(input_tensor_values.begin(), input_tensor_values.end(),
                 [&] { return rand() % 255; });
-  std::vector<Ort::Value> input_tensors;
-  input_tensors.emplace_back(
-      vec_to_tensor<float>(input_tensor_values, input_shape));
 
-  // double-check the dimensions of the input tensor
-  assert(input_tensors[0].IsTensor() &&
-         input_tensors[0].GetTensorTypeAndShapeInfo().GetShape() ==
-             input_shape);
-  std::cout << "\ninput_tensor shape: "
-            << print_shape(
-                   input_tensors[0].GetTensorTypeAndShapeInfo().GetShape())
-            << std::endl;
+    inputs_tensors.emplace_back(
+        vec_to_tensor<float>(input_tensor_values, inputs_shapes_.at(i)));
 
-  // pass data through model
-  std::vector<const char *> input_names_char(input_names_.size(), nullptr);
-  std::transform(std::begin(input_names_), std::end(input_names_),
-                 std::begin(input_names_char),
+    // Double-check the dimensions of the input tensor
+    assert(inputs_tensors.at(i).IsTensor() &&
+           inputs_tensors.at(i).GetTensorTypeAndShapeInfo().GetShape() == inputs_shapes_.at(i));
+  
+    std::cout << "input_tensor shape: "
+              << print_shape(
+                    inputs_tensors.at(i).GetTensorTypeAndShapeInfo().GetShape())
+              << std::endl;
+  }
+
+  // Convert names to C strings
+  std::vector<const char *> inputs_names_char(inputs_names_.size(), nullptr);
+  std::transform(std::begin(inputs_names_), std::end(inputs_names_),
+                 std::begin(inputs_names_char),
                  [&](const std::string &str) { return str.c_str(); });
 
-  std::vector<const char *> output_names_char(output_names_.size(), nullptr);
-  std::transform(std::begin(output_names_), std::end(output_names_),
-                 std::begin(output_names_char),
+  std::vector<const char *> outputs_names_char(outputs_names_.size(), nullptr);
+  std::transform(std::begin(outputs_names_), std::end(outputs_names_),
+                 std::begin(outputs_names_char),
                  [&](const std::string &str) { return str.c_str(); });
 
+  // Pass random data through model
   std::cout << "Running model once to check validity..." << std::endl;
-
   try {
-    auto output_tensors =
-        session_->Run(Ort::RunOptions{nullptr}, input_names_char.data(),
-                      input_tensors.data(), input_names_char.size(),
-                      output_names_char.data(), output_names_char.size());
+    auto outputs_tensors =
+        session_->Run(Ort::RunOptions{nullptr}, inputs_names_char.data(),
+                      inputs_tensors.data(), inputs_names_char.size(),
+                      outputs_names_char.data(), outputs_names_char.size());
     std::cout << "Done!" << std::endl;
 
     // double-check the dimensions of the output tensors
     // NOTE: the number of output tensors is equal to the number of output nodes
     // specifed in the Run() call
-    assert(output_tensors.size() == output_names_.size() &&
-           output_tensors[0].IsTensor());
+    assert(outputs_tensors.size() == outputs_names_.size() &&
+           outputs_tensors.at(0).IsTensor());
+
+    for (std::size_t i = 0; i < outputs_tensors.size(); i++) {
+      std::cout << "output_tensor shape: "
+                << print_shape(
+                      outputs_tensors.at(i).GetTensorTypeAndShapeInfo().GetShape())
+                << std::endl;
+    }
+
+
   } catch (const Ort::Exception &exception) {
     std::cout << "ERROR running model inference: " << exception.what()
               << std::endl;
@@ -232,66 +246,118 @@ void OnnxWrapper::initialize() {
   }
 }
 
-Vxf OnnxWrapper::run(const Vxf &v) {
+std::vector<Vxf> OnnxWrapper::run(const std::vector<Vxf> &vs) {
 
-  // Check size of the input vector
-  assert(v.size() == total_number_elements_);
+  // std::cout << "VS Content" << std::endl;
+  // std::cout << vs.front().transpose() << std::endl;
+  // std::cout << vs.back().transpose() << std::endl;
 
-  // Convert Eigen vector to std vector
-  std::vector<float> std_v;
-  std_v.resize(v.size());
-  Vxf::Map(&std_v[0], v.size()) = v;
+  // Check size of the input vectors
+  assert(vs.size() == inputs_names_.size());
 
-  // Convert std vector to ONNX Runtime tensor
-  std::vector<Ort::Value> input_tensors;
-  input_tensors.emplace_back(vec_to_tensor<float>(std_v, input_shapes_));
+  for (std::size_t i = 0; i < inputs_names_.size(); i++) {
+    assert(vs.at(i).size() == total_numbers_elements_.at(i));
+  }
 
-  // Double-check the dimensions of the input tensor
-  assert(input_tensors[0].IsTensor() &&
-         input_tensors[0].GetTensorTypeAndShapeInfo().GetShape() ==
-             input_shapes_);
+  // Convert Eigen vector to std vector, then to ONNX Runtime tensors
+  std::vector<std::vector<float>> inputs_std_v;
+  for (std::size_t i = 0; i < inputs_names_.size(); i++) {
+    std::vector<float> std_v;
+    std_v.resize(vs.at(i).size());
+    inputs_std_v.push_back(std_v);
+  }
 
-  // pass data through model
-  std::vector<const char *> input_names_char(input_names_.size(), nullptr);
-  std::transform(std::begin(input_names_), std::end(input_names_),
-                 std::begin(input_names_char),
+  std::vector<Ort::Value> inputs_tensors;
+
+  for (std::size_t i = 0; i < inputs_names_.size(); i++) {
+    //std::vector<float> std_v;
+    //std_v.resize(vs.at(i).size());
+    //Vxf::Map(&std_v[0], vs.at(i).size()) = vs.at(i);
+
+    Vxf::Map(&(inputs_std_v.at(i))[0], vs.at(i).size()) = vs.at(i);
+
+    /*Ort::Value tensor = vec_to_tensor<float>(std_v, inputs_shapes_.at(i));
+    float *ftensor = tensor.GetTensorMutableData<float>();
+    std::cout << "ftensor" << std::endl;
+    for (int i = 0; i < 92; i++) {
+      std::cout << i << " " << ftensor[i] << std::endl;
+    }*/
+
+    inputs_tensors.emplace_back(vec_to_tensor<float>(inputs_std_v.at(i), inputs_shapes_.at(i)));
+
+    /*float *floatarrinq = inputs_tensors.front().GetTensorMutableData<float>();
+    std::cout << "inside loop" << std::endl;
+    for (int i = 0; i < 15; i++) {
+      std::cout << i << " " << floatarrinq[i] << std::endl;
+    }*/
+  }
+
+  /*float *floatarrinq = inputs_tensors.front().GetTensorMutableData<float>();
+  std::cout << "ini tensor" << std::endl;
+  for (int i = 0; i < 92; i++) {
+    std::cout << i << " " << floatarrinq[i] << std::endl;
+  }*/
+
+  // Double-check the dimensions of the inputs tensors
+  for (std::size_t i = 0; i < inputs_shapes_.size(); i++) {
+    assert(inputs_tensors.at(i).IsTensor() &&
+           inputs_tensors.at(i).GetTensorTypeAndShapeInfo().GetShape() == inputs_shapes_.at(i));
+  }
+
+  // Convert names to C strings
+  std::vector<const char *> inputs_names_char(inputs_names_.size(), nullptr);
+  std::transform(std::begin(inputs_names_), std::end(inputs_names_),
+                 std::begin(inputs_names_char),
                  [&](const std::string &str) { return str.c_str(); });
 
-  std::vector<const char *> output_names_char(output_names_.size(), nullptr);
-  std::transform(std::begin(output_names_), std::end(output_names_),
-                 std::begin(output_names_char),
+  std::vector<const char *> outputs_names_char(outputs_names_.size(), nullptr);
+  std::transform(std::begin(outputs_names_), std::end(outputs_names_),
+                 std::begin(outputs_names_char),
                  [&](const std::string &str) { return str.c_str(); });
 
   // Get pointer to output tensor float values
-  /* float *floatarrin = input_tensors.front().GetTensorMutableData<float>();
+  /*float *floatarrin = inputs_tensors.front().GetTensorMutableData<float>();
   std::cout << "in tensor" << std::endl;
-  for (int i = 0; i < 35; i++) {
+  for (int i = 0; i < 92; i++) {
     std::cout << i << " " << floatarrin[i] << std::endl;
-  } */
+  }
+  float *floatarrina = inputs_tensors.back().GetTensorMutableData<float>();
+  std::cout << "in tensor" << std::endl;
+  for (int i = 0; i < 128; i++) {
+    std::cout << i << " " << floatarrina[i] << std::endl;
+  }*/
 
   // Run inference
   try {
     auto output_tensors =
-        session_->Run(Ort::RunOptions{nullptr}, input_names_char.data(),
-                      input_tensors.data(), input_names_char.size(),
-                      output_names_char.data(), output_names_char.size());
+        session_->Run(Ort::RunOptions{nullptr}, inputs_names_char.data(),
+                      inputs_tensors.data(), inputs_names_char.size(),
+                      outputs_names_char.data(), outputs_names_char.size());
     // Double-check the dimensions of the output tensors
     // NOTE: the number of output tensors is equal to the number of output nodes
     // specifed in the Run() call
-    assert(output_tensors.size() == output_names_.size() &&
-           output_tensors[0].IsTensor());
+    assert(output_tensors.size() == outputs_names_.size() &&
+           output_tensors.at(0).IsTensor());
 
-    // Create output vector that will contain the actions
-    Vxf output = Vxf::Zero(get_actDim());
-    assert(output.size() == output_shapes_[0]);
+    // Create output vector that will contain the results
+    std::vector<Vxf> outputs;
+    for (std::size_t i = 0; i < output_tensors.size(); i++) {
+      std::vector<std::int64_t> tensor_shape = output_tensors.at(i).GetTensorTypeAndShapeInfo().GetShape();
+      int tensor_size = calculate_product(tensor_shape);
+      assert(tensor_size == calculate_product(outputs_shapes_.at(i)));
+      Vxf output = Vxf::Zero(tensor_size);
+      
+      // Get pointer to output tensor float values
+      float *floatarr = output_tensors.at(i).GetTensorMutableData<float>();
+      for (int i = 0; i < output.size(); i++) {
+        output[i] = floatarr[i];
+      }
 
-    // Get pointer to output tensor float values
-    float *floatarr = output_tensors.front().GetTensorMutableData<float>();
-    for (int i = 0; i < output.size(); i++) {
-      output[i] = floatarr[i];
+      outputs.push_back(output);
+      // std::cout << "OUT" << outputs.back().transpose() << std::endl;
     }
 
-    return output;
+    return outputs;
 
   } catch (const Ort::Exception &exception) {
     std::cout << "ERROR running model inference: " << exception.what()
