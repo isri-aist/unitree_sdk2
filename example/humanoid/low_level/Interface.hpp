@@ -48,7 +48,7 @@ public:
   /// \brief  Forward pass
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vxf forward();
+  // Vxf forward();
   Vxf forward_ManiSkill(); // Forward pass with ManiSkill policy
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,18 +122,19 @@ public:
             .count());
   }
 
-  int get_obsDim() { return policy_->get_obsDim(); }
-  int get_actDim() { return policy_->get_actDim(); }
+  int get_obsDim() { return policy_actor_->get_obsDim(); }
+  int get_actDim() { return policy_actor_->get_actDim(); }
 
   // Control policy
-  std::shared_ptr<OnnxWrapper> policy_;
+  std::shared_ptr<OnnxWrapper> policy_actor_, policy_estim_;
 
   // Misc
   Vector3 vel_command_ = Vector3::Zero();
   Vxf pTarget_, q_ref_, obs_, actorObs_, studentObs_, historyObs_,
-      historyTempObs_, latentOut_, actions_;
+      historyTempObs_, latentOut_, actions_, estim_vel_, h_gru_;
   Vxf last_actions_; // , last_dof_pos_, last_dof_vel_;
-  int obsDim_, actDim_, historyLength_, historySamples_, historyStep_, iter_;
+  int obsDim_, actDim_, obsDim_estim_, actDim_estim_;
+  int historyLength_, historySamples_, historyStep_, iter_;
   float dt_;
   std::chrono::time_point<std::chrono::steady_clock> t_start_;
   std::chrono::time_point<std::chrono::steady_clock> t_end_;
@@ -173,15 +174,26 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
                            const Vxf &q_ref, float dt) {
 
   // Initialize ONNX framework
-  policy_ = std::make_shared<OnnxWrapper>(model_file);
-  policy_->initialize();
+  std::basic_string<ORTCHAR_T> actor_file = model_file;
+  actor_file.append("_actor.onnx");
+  std::basic_string<ORTCHAR_T> estim_file = model_file;
+  estim_file.append("_estimator.onnx");
+  policy_actor_ = std::make_shared<OnnxWrapper>(actor_file);
+  policy_actor_->initialize();
 
-  // Retrieve info about network
-  obsDim_ = policy_->get_obsDim();
-  actDim_ = policy_->get_actDim();
+  policy_estim_ = std::make_shared<OnnxWrapper>(estim_file);
+  policy_estim_->initialize();
 
-  std::cout << "Network parameters: " << std::endl;
+  // Retrieve info about networks
+  obsDim_ = policy_actor_->get_obsDim();
+  actDim_ = policy_actor_->get_actDim();
+  std::cout << "Actor Network parameters: " << std::endl;
   std::cout << "obsDim: " << obsDim_ << " | actDim: " << actDim_ << std::endl;
+
+  obsDim_estim_ = policy_estim_->get_obsDim();
+  actDim_estim_ = policy_estim_->get_actDim();
+  std::cout << "Actor Network parameters: " << std::endl;
+  std::cout << "obsDim: " << obsDim_estim_ << " | actDim: " << actDim_estim_ << std::endl;
 
   // Initialize some tensors
   obs_ = Vxf::Zero(obsDim_);
@@ -192,6 +204,8 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
   actions_ = Vxf::Zero(actDim_);
   last_actions_ = Vxf::Zero(actDim_);
   pTarget_ = Vxf::Zero(actDim_);
+  estim_vel_ = Vxf::Zero(3);
+  h_gru_ = Vxf::Zero(128);
   /*last_actions_ = Eigen::MatrixXf::Zero(nJoints, 6);
   last_dof_pos_ = Eigen::MatrixXf::Zero(nJoints, 6);
   last_dof_vel_ = Eigen::MatrixXf::Zero(nJoints, 6);*/
@@ -216,10 +230,11 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
   t_end_ = std::chrono::steady_clock::now();
 }
 
+/*
 Vxf Interface::forward() {
 
   // Compute policy actions
-  actions_ = policy_->run(obs_);
+  actions_ = policy_actor_->run(obs_);
 
   // Target joint positions based on scaled actions
   assert(q_ref_.rows() == actDim_);
@@ -234,6 +249,7 @@ Vxf Interface::forward() {
 
   return pTarget_;
 }
+*/
 
 void Interface::update_observation_with_clock(
     const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
@@ -356,12 +372,32 @@ Vxf Interface::reorder_act(const Vxf &v) {
 
 Vxf Interface::forward_ManiSkill() {
 
+  // obs_ = Vxf::Ones(92);
+  // h_gru_ = Vxf::Ones(128);
+
+  // Compute velocity estimation
+  // std::cout << "Build inputs " << std::endl;
+  std::vector<Vxf> inputs_estimator = {obs_, h_gru_};
+  // std::cout << obs_.size() << " " << h_gru_.size() << std::endl;
+  // std::cout << "Estimator call " << std::endl;
+  std::vector<Vxf> outputs_estimator = policy_estim_->run(inputs_estimator);
+  // std::cout << "Retrieve outputs " << std::endl;
+  estim_vel_ = outputs_estimator.front();
+  h_gru_ = outputs_estimator.back();
+
+  // std::cout << "Estim vel " << estim_vel_ << std::endl;
+  // std::cout << "h_gru     " << h_gru_ << std::endl;
+
   // Compute policy actions
-  actions_ = policy_->run(obs_);
+  std::vector<Vxf> inputs_actor = {obs_, estim_vel_};
+  std::vector<Vxf> outputs_actor = policy_actor_->run(inputs_actor);
+  actions_ = outputs_actor.front();
+
+  // std::cout << "actions_  " << actions_ << std::endl;
 
   // Force torso to 0
   /*actions_[2] = 0.0;
-  for (int i = 10; i < policy_out_.rows(); ++i) {
+  for (int i = 10; i < policy_actor_out_.rows(); ++i) {
     actions_[i] = 0.0;
   }*/
 
@@ -442,22 +478,14 @@ void Interface::update_observation_ManiSkill(
   // TODO: Flatten with Map<VectorXf> v1(M1.data(), M1.size());
   // to reshape into a Vector with all columns flattened.
 
+  //std::cout << hist_base_ang_vel.col(0).transpose() << std::endl;
+
   // Filling observation vector
   obs_ << hist_base_ang_vel.col(0),
-          hist_base_ang_vel.col(1),
-          hist_base_ang_vel.col(2),
           hist_roll_pitch.col(0),
-          hist_roll_pitch.col(1),
-          hist_roll_pitch.col(2),
           hist_pos_lower.col(0),
-          hist_pos_lower.col(1),
-          hist_pos_lower.col(2),
           hist_vel_lower.col(0),
-          hist_vel_lower.col(1),
-          hist_vel_lower.col(2),
           hist_act_lower.col(0),
-          hist_act_lower.col(1),
-          hist_act_lower.col(2),
           /*reorder_obs(pos),
           reorder_obs(vel),
           actions_,
@@ -467,7 +495,8 @@ void Interface::update_observation_ManiSkill(
           cmd(0),
           cmd(1),
           cmd(5),
-          Vxf::Zero(116);
+          Vxf::Zero(6),
+          Vxf::Zero(46);
           // Vxf::Zero(4); // Unused by actor but was there for critic
           //Vxf::Zero(319); // Unused by actor
 
