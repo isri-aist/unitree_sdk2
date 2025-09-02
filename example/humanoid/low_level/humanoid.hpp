@@ -73,8 +73,8 @@ public:
         &HumanoidExample::UpdateTables, this, false);
 
     // Scale the policy control gains
-    kp_ *= 1.0;
-    // kd_ *= 0.0;
+    kp_ *= 0.0;
+    kd_ *= 0.0;
     // kp_wait_ *= 0.0;
     // kd_wait_ *= 0.0;
   
