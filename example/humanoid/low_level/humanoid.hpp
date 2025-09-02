@@ -44,8 +44,8 @@ public:
   HumanoidExample(const std::string &networkInterface = "",
                   const std::string &model_file = "")
       : mlpInterface_() {
-    unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
+    unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
 
     lowcmd_publisher_.reset(
         new unitree::robot::ChannelPublisher<unitree_go::msg::dds_::LowCmd_>(
