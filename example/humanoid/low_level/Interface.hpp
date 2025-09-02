@@ -482,10 +482,20 @@ void Interface::update_observation_ManiSkill(
 
   // Filling observation vector
   obs_ << hist_base_ang_vel.col(0),
+          //hist_base_ang_vel.col(1),
+          //hist_base_ang_vel.col(2),
           hist_roll_pitch.col(0),
+          //hist_roll_pitch.col(1),
+          //hist_roll_pitch.col(2),
           hist_pos_lower.col(0),
+          //hist_pos_lower.col(1),
+          //hist_pos_lower.col(2),
           hist_vel_lower.col(0),
+          //hist_vel_lower.col(1),
+          //hist_vel_lower.col(2),
           hist_act_lower.col(0),
+          //hist_act_lower.col(1),
+          //hist_act_lower.col(2),
           /*reorder_obs(pos),
           reorder_obs(vel),
           actions_,
@@ -494,9 +504,19 @@ void Interface::update_observation_ManiSkill(
           std::sin(phase),
           cmd(0),
           cmd(1),
+          cmd(5);
+          /*Vxf::Zero(6),
+          hist_base_ang_vel.col(0),
+          hist_roll_pitch.col(0),
+          hist_pos_lower.col(0),
+          hist_vel_lower.col(0),
+          hist_act_lower.col(0),
+          std::cos(phase),
+          std::sin(phase),
+          cmd(0),
+          cmd(1),
           cmd(5),
-          Vxf::Zero(6),
-          Vxf::Zero(46);
+          Vxf::Zero(6);*/
           // Vxf::Zero(4); // Unused by actor but was there for critic
           //Vxf::Zero(319); // Unused by actor
 
