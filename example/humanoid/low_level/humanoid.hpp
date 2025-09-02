@@ -289,6 +289,21 @@ public:
         policy_out_ = mlpInterface_.forward();
         */
 
+        /*
+        // DEBUG: Apply sinusoidal torque command to a given joint of both legs
+        policy_out_ = Vxf::Zero(19);
+        policy_out_ += q_init_.head(19);
+        float freq = 1.0; //std::floor(time_run_ / 2) + 1;
+        float tgt = 2.0 * std::sin(2 * pi_v * freq * time_run_);
+        const int Ni = 3;
+        policy_out_(Ni) = policy_out_(Ni);// + tgt;
+        policy_out_(Ni + 5) = policy_out_(Ni + 5);// - tgt;
+
+        if (time_run_ > 6.0) {
+          status_ = STATUS_DAMPING;
+        }
+        */
+
         // Check policy output size
         assert(policy_out_.rows() == mlpInterface_.get_actDim());
 
@@ -320,7 +335,7 @@ public:
           motor_command_tmp.kd.at(moti[i]) = kd_(i);
           motor_command_tmp.q_ref.at(moti[i]) = q_des;
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
-          motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+          motor_command_tmp.tau_ff.at(moti[i]) = 0.f; // ((i == 3) || (i == 8)) ? tgt : 0.0;
         }
         break;
       }
