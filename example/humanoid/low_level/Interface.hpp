@@ -204,7 +204,7 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
   actions_ = Vxf::Zero(actDim_);
   last_actions_ = Vxf::Zero(actDim_);
   pTarget_ = Vxf::Zero(actDim_);
-  estim_vel_ = Vxf::Zero(3);
+  estim_vel_ = Vxf::Zero(6);
   h_gru_ = Vxf::Zero(128);
   /*last_actions_ = Eigen::MatrixXf::Zero(nJoints, 6);
   last_dof_pos_ = Eigen::MatrixXf::Zero(nJoints, 6);
@@ -377,19 +377,18 @@ Vxf Interface::forward_ManiSkill() {
 
   // Compute velocity estimation
   // std::cout << "Build inputs " << std::endl;
+  
+  /*
   std::vector<Vxf> inputs_estimator = {obs_, h_gru_};
-  // std::cout << obs_.size() << " " << h_gru_.size() << std::endl;
-  // std::cout << "Estimator call " << std::endl;
   std::vector<Vxf> outputs_estimator = policy_estim_->run(inputs_estimator);
-  // std::cout << "Retrieve outputs " << std::endl;
   estim_vel_ = outputs_estimator.front();
   h_gru_ = outputs_estimator.back();
-
-  // std::cout << "Estim vel " << estim_vel_ << std::endl;
-  // std::cout << "h_gru     " << h_gru_ << std::endl;
+  */
+  
+  //std::cout << "Estim " << estim_vel_.transpose() << std::endl;
 
   // Compute policy actions
-  std::vector<Vxf> inputs_actor = {obs_, estim_vel_};
+  std::vector<Vxf> inputs_actor = {obs_}; // , Vxf::Zero(6)};
   std::vector<Vxf> outputs_actor = policy_actor_->run(inputs_actor);
   actions_ = outputs_actor.front();
 
@@ -418,7 +417,7 @@ Vxf Interface::forward_ManiSkill() {
 
   // Target joint positions based on scaled actions
   assert(q_ref_.rows() == reorder_act(actions_).rows());
-  pTarget_ = q_ref_ + 0.75 * reorder_act(actions_) + 0.25 * last_actions_ ;
+  pTarget_ = q_ref_ + 1.0 * reorder_act(actions_); //  + 0.25 * last_actions_ ;
 
   assert(pTarget_.rows() == q_ref_.rows());
 
@@ -448,7 +447,7 @@ void Interface::update_observation_ManiSkill(
   float phase = 2 * pi_v * 1.2 * time;
 
   Vector3 base_ang_vel = gyro;
-  base_ang_vel.head(2) *= -1;  // Invert x y to abide by simulation convention
+  // base_ang_vel.head(2) *= -1;  // Invert x y to abide by simulation convention
   
   Vector10 pos_lower, vel_lower, act_lower;
   Vector19 reordered_pos = reorder_obs(pos);
