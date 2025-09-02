@@ -36,19 +36,21 @@ int main(int argc, ORTCHAR_T *argv[]) {
 
   // Run one inference
   Vxf input = Vxf::Ones(obsDim);
-  Vxf A = wrapper->run(input);
+  std::vector<Vxf> inputs = {input};
+  std::vector<Vxf> A = wrapper->run(inputs);
   std::cout << "Output for obs vector full of 1s:" << std::endl
-            << A.transpose() << std::endl;
+            << A.front().transpose() << std::endl;
 
   input = Vxf::Zero(obsDim);
-  A = wrapper->run(input);
+  inputs.front() = input;
+  A = wrapper->run(inputs);
   std::cout << "Output for obs vector full of 0s:" << std::endl
-            << A.transpose() << std::endl;
+            << A.front().transpose() << std::endl;
 
   // Time the average computation time for inference
   auto t1 = high_resolution_clock::now();
   for (int i = 0; i < 100; i++) {
-    wrapper->run(Vxf::Zero(obsDim));
+    wrapper->run(inputs);
   }
   auto t2 = high_resolution_clock::now();
 
