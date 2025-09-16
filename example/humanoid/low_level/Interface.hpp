@@ -361,10 +361,14 @@ Vxf Interface::reorder_act(const Vxf &v) {
 
   // From ManiSkill order to URDF order
   Vxf out = Vxf::Zero(19);
-  int idx[19] = {0, 3, 7, 11, 15, 1, 4, 8, 12, 16, // Legs
+  /*int idx[19] = {0, 3, 7, 11, 15, 1, 4, 8, 12, 16, // Legs
                  2, // Torso
                  5, 9, 13, 17, 6, 10, 14, 18};  // Arms
   for (int i = 0; i < 19; i++) {
+    out[i] = v[idx[i]];
+  } */
+  int idx[10] = {0, 2, 4, 6, 8, 1, 3, 5, 7, 9};         
+  for (int i = 0; i < 10; i++) {
     out[i] = v[idx[i]];
   }
   return out;
@@ -378,21 +382,20 @@ Vxf Interface::forward_ManiSkill() {
   // Compute velocity estimation
   // std::cout << "Build inputs " << std::endl;
   
-  /*
-  std::vector<Vxf> inputs_estimator = {obs_, h_gru_};
+  
+  /*std::vector<Vxf> inputs_estimator = {obs_, h_gru_};
   std::vector<Vxf> outputs_estimator = policy_estim_->run(inputs_estimator);
   estim_vel_ = outputs_estimator.front();
-  h_gru_ = outputs_estimator.back();
-  */
+  h_gru_ = outputs_estimator.back();*/
   
   //std::cout << "Estim " << estim_vel_.transpose() << std::endl;
 
   // Compute policy actions
-  std::vector<Vxf> inputs_actor = {obs_}; // , Vxf::Zero(6)};
+  std::vector<Vxf> inputs_actor = {obs_}; //, estim_vel_};
   std::vector<Vxf> outputs_actor = policy_actor_->run(inputs_actor);
   actions_ = outputs_actor.front();
 
-  // std::cout << "actions_  " << actions_ << std::endl;
+  //std::cout << "actions_  " << actions_ << std::endl;
 
   // Force torso to 0
   /*actions_[2] = 0.0;
@@ -401,11 +404,11 @@ Vxf Interface::forward_ManiSkill() {
   }*/
 
   // Force torso and arms to 0
-  std::array<int, 9> idx = {2, 5, 6, 9, 10, 13, 14, 17, 18};
+  /*std::array<int, 9> idx = {2, 5, 6, 9, 10, 13, 14, 17, 18};
   for (size_t i = 0; i < idx.size(); ++i) {
     actions_[idx[i]] = 0.0;
   }
-  actions_[2] = 0.0;
+  actions_[2] = 0.0;*/
 
   // Force arms to 0 except pitch
   /* actions_[9] = 0.0;
@@ -417,11 +420,11 @@ Vxf Interface::forward_ManiSkill() {
 
   // Target joint positions based on scaled actions
   assert(q_ref_.rows() == reorder_act(actions_).rows());
-  pTarget_ = q_ref_ + 1.0 * reorder_act(actions_); //  + 0.25 * last_actions_ ;
+  pTarget_ = q_ref_ + reorder_act(actions_); //  + 0.25 * last_actions_ ;
 
   assert(pTarget_.rows() == q_ref_.rows());
 
-  last_actions_.col(0) = reorder_act(actions_);
+  // last_actions_.col(0) = reorder_act(actions_);
 
   // Log time
   t_end_ = std::chrono::steady_clock::now();
@@ -457,7 +460,7 @@ void Interface::update_observation_ManiSkill(
   for (size_t i = 0; i < idx.size(); ++i) {
     pos_lower[i] = reordered_pos[idx[i]];
     vel_lower[i] = reordered_vel[idx[i]];
-    act_lower[i] = actions_[idx[i]];
+    act_lower[i] = actions_[i];
   }
 
   // Roll history
@@ -480,21 +483,21 @@ void Interface::update_observation_ManiSkill(
   //std::cout << hist_base_ang_vel.col(0).transpose() << std::endl;
 
   // Filling observation vector
-  obs_ << hist_base_ang_vel.col(0),
-          //hist_base_ang_vel.col(1),
-          //hist_base_ang_vel.col(2),
+  obs_ << hist_base_ang_vel.col(0) * 0.25,
+          hist_base_ang_vel.col(1) * 0.25,
+          hist_base_ang_vel.col(2) * 0.25,
           hist_roll_pitch.col(0),
-          //hist_roll_pitch.col(1),
-          //hist_roll_pitch.col(2),
+          hist_roll_pitch.col(1),
+          hist_roll_pitch.col(2),
           hist_pos_lower.col(0),
-          //hist_pos_lower.col(1),
-          //hist_pos_lower.col(2),
-          hist_vel_lower.col(0),
-          //hist_vel_lower.col(1),
-          //hist_vel_lower.col(2),
+          hist_pos_lower.col(1),
+          hist_pos_lower.col(2),
+          hist_vel_lower.col(0) * 0.05,
+          hist_vel_lower.col(1) * 0.05,
+          hist_vel_lower.col(2) * 0.05,
           hist_act_lower.col(0),
-          //hist_act_lower.col(1),
-          //hist_act_lower.col(2),
+          hist_act_lower.col(1),
+          hist_act_lower.col(2),
           /*reorder_obs(pos),
           reorder_obs(vel),
           actions_,
@@ -536,6 +539,8 @@ void Interface::update_observation_ManiSkill(
   std::cout << std::cos(phase) << std::endl;
   std::cout << std::sin(phase) << std::endl;
   std::cout << "== == == ==" << std::endl;*/
+
+  // obs_ = obs_ * 0.0 + Vxf::Ones(obsDim_);
 
   // Iteration counter
   iter_++;
