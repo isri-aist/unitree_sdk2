@@ -45,7 +45,8 @@ public:
                   const std::string &model_file = "")
       : mlpInterface_() {
     std::cout << "Initialize channel factory." << std::endl;
-    unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
+    unitree::robot::ChannelFactory::Instance()->Init(1, "lo");
+    // unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
 
     lowcmd_publisher_.reset(
         new unitree::robot::ChannelPublisher<unitree_go::msg::dds_::LowCmd_>(
@@ -249,7 +250,7 @@ public:
           cmd_(0) = 0.0;
         }
 
-
+        /*
         time_nonzero += control_dt_;
         for (int i = 0; i < 6; ++i) {
           if (std::abs(cmd_(i)) > 0.1) {time_nonzero = 0.0;}
@@ -264,6 +265,7 @@ public:
           if (time_nonzero == 0.0) {loco_mode = 0.0;}
           if (time_nonzero > 2.0) {loco_mode = 1.0;}
         }
+        */
 
         //std::cout << "LOCO " << loco_mode << std::endl;
 
@@ -305,7 +307,7 @@ public:
         */
 
         // Check policy output size
-        assert(policy_out_.rows() == mlpInterface_.get_actDim());
+        assert(policy_out_.rows() == 19);
 
         // Logging policy output
         for (int i = 0; i < policy_out_.rows(); ++i) {
