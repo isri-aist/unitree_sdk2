@@ -31,10 +31,9 @@
 
 #define STATUS_INIT 0
 #define STATUS_WAITING_AIR 1
-#define STATUS_WAITING_GRD 2
-#define STATUS_GAIN_TRANSITION 3
-#define STATUS_RUN 4
-#define STATUS_DAMPING 5
+#define STATUS_GAIN_TRANSITION 2
+#define STATUS_RUN 3
+#define STATUS_DAMPING 4
 
 static const std::string kTopicLowCommand = "rt/lowcmd";
 static const std::string kTopicLowState = "rt/lowstate";
@@ -45,14 +44,15 @@ void waiting(HumanoidExample *HE);
 class HumanoidExample {
 public:
   HumanoidExample(const std::string &networkInterface = "",
-                  const std::string &model_file = "") {
+                  const std::string &model_file = "")
+      : networkInterface_() {
 
     unitree::robot::ChannelFactory::Instance()->Init(1, "lo");
     // unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 
     msc.reset(new unitree::robot::b2::MotionSwitcherClient());
-    msc->SetTimeout(5.0F);
+    msc->SetTimeout(2.0F);
     msc->Init();
 
     /*Shut down  motion control-related service*/
@@ -115,8 +115,8 @@ public:
         this);
 
     // Create link with network interface
-    // networkInterface_.initialize(model_file, q_init_.head(19), control_dt_);
-    // policy_out_ = Vxf::Zero(networkInterface_.get_actDim());
+    networkInterface_.initialize(model_file, q_init_.head(19), control_dt_);
+    policy_out_ = Vxf::Zero(networkInterface_.get_actDim());
 
     // Initialize tables for console display
     UpdateTables(true);
@@ -235,11 +235,6 @@ private:
 
   int status_ = STATUS_INIT;
 
-  float kp_low_ = 60.f;
-  float kp_high_ = 200.f;
-  float kd_low_ = 1.5f;
-  float kd_high_ = 5.f;
-
   float hip_pitch_init_pos_ = -0.5f;
   float knee_init_pos_ = 1.f;
   float ankle_init_pos_ = -0.5f;
@@ -248,6 +243,44 @@ private:
   float time_ = 0.f;
   float time_run_ = 0.f;
   float time_log_ = 0.f;
+
+  // Default configuration
+  const Vector20 q_init_{
+      0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2,  0.6, -0.4, // Legs
+      0.0, 0.4,  0.0, 0.0, -0.4, 0.4, 0.0,  0.0, -0.4,       // Torso and arms
+      0.0};                                                  // Unused joint
+  const Vector20 q_lim_lower{-0.43, -0.43, -3.14, -0.26, -0.87,
+                             -0.43, -0.43, -3.14, -0.26, -0.87, // Legs
+                             -2.35, -2.87, -0.34, -1.3,  -1.25,
+                             -2.87, -3.11, -4.45, -1.25, // Torso and arms
+                             0.0};                       // Unused joint
+  const Vector20 q_lim_upper{
+      0.43, 0.43, 2.53, 2.05, 0.52,
+      0.43, 0.43, 2.53, 2.05, 0.52, // Legs
+      2.35, 2.87, 3.11, 4.45, 2.61, 2.87, 0.34, 1.3,  2.61, // Torso and arms
+      0.0};                                                 // Unused joint
+
+  // Proportional derivative gains
+  Vector20 kp_{200.0, 200.0, 200.0, 300.0, 40.0,
+               200.0, 200.0, 200.0, 300.0, 40.0, // Legs
+               300.0, 40.0, 40.0, 40.0, 40.0,
+               40.0, 40.0, 40.0, 40.0, // Torso and arms
+               0.0};                   // Unused joint
+
+  Vector20 kd_{5.0, 5.0, 5.0, 6.0, 2.0, 5.0, 5.0, 5.0, 6.0, 2.0, // Legs
+               6.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, // Torso and arms
+              0.0};
+
+  Vector20 kp_wait_{1500.0, 1500.0, 1500.0, 1500.0, 1500.0,
+                    1500.0, 1500.0, 1500.0, 1500.0, 1500.0, // Legs
+                    200.0,  200.0,  100.0,  100.0,  200.0,
+                    200.0,  100.0,  100.0,  200.0, // Torso and arms
+                    0.0};                          // Unused joint
+
+  Vector20 kd_wait_{
+      25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, // Legs
+      6.0,  2.0,  2.0,  2.0,  2.0,  2.0,  2.0,  2.0,  2.0, // Torso and arms
+      0.0};                                                // Unused joint
 
   std::array<float, kNumMotors> desired_torques_ = {};
   std::array<float, 19> policy_log_ = {};
@@ -274,6 +307,13 @@ private:
   fort::char_table table_legs_;
   fort::char_table table_arms_;
   fort::char_table table_misc_;
+
+  // Reordering quaternion vector
+  const Eigen::Matrix<float, 4, 4> quatPermut{{0, 1, 0, 0},
+                                              {0, 0, 1, 0},
+                                              {0, 0, 0, 1},
+                                              {1, 0, 0, 0}};
+
 };
 
 ////
@@ -290,10 +330,6 @@ void waiting(HumanoidExample *HE) {
 
 void HumanoidExample::endWaiting() {
   if (status_ == STATUS_WAITING_AIR) {
-    status_ = STATUS_WAITING_GRD;
-    std::thread wait_thread(waiting, this);
-    wait_thread.detach();
-  } else if (status_ == STATUS_WAITING_GRD) {
     time_run_ = -control_dt_;
     status_ = STATUS_GAIN_TRANSITION;
   }
@@ -372,37 +408,269 @@ void HumanoidExample::Control() {
   MotorCommand motor_command_tmp;
   const std::shared_ptr<const MotorState> ms_tmp_ptr =
       motor_state_buffer_.GetData();
+  const std::shared_ptr<const BaseState> bs_tmp_ptr =
+      base_state_buffer_.GetData();
 
-  if (ms_tmp_ptr) {
+  if (ms_tmp_ptr && bs_tmp_ptr) {
     time_ += control_dt_;
-    time_ = std::clamp(time_, 0.f, init_duration_);
-    float ratio = time_ / init_duration_;
+
+    Vector20 pos, vel, tau;
     for (int i = 0; i < kNumMotors; ++i) {
-      motor_command_tmp.kp.at(i) = IsWeakMotor(i) ? kp_low_ : kp_high_;
-      motor_command_tmp.kd.at(i) = IsWeakMotor(i) ? kd_low_ : kd_high_;
-      motor_command_tmp.dq_ref.at(i) = 0.f;
-      motor_command_tmp.tau_ff.at(i) = 0.f;
-
-      float q_des = 0.f;
-      if (i == JointIndex::kLeftHipPitch || i == JointIndex::kRightHipPitch) {
-        q_des = hip_pitch_init_pos_;
-      }
-      if (i == JointIndex::kLeftKnee || i == JointIndex::kRightKnee) {
-        q_des = knee_init_pos_;
-      }
-      if (i == JointIndex::kLeftAnkle || i == JointIndex::kRightAnkle) {
-        q_des = ankle_init_pos_;
-      }
-      if (i == JointIndex::kLeftShoulderPitch ||
-          i == JointIndex::kRightShoulderPitch) {
-        q_des = shoulder_pitch_init_pos_;
-      }
-
-      q_des = (q_des - ms_tmp_ptr->q.at(i)) * ratio + ms_tmp_ptr->q.at(i);
-      motor_command_tmp.q_ref.at(i) = q_des;
+      pos(i) = ms_tmp_ptr->q.at(moti[i]);
+      vel(i) = ms_tmp_ptr->dq.at(moti[i]);
+      tau(i) = ms_tmp_ptr->tau.at(moti[i]);
     }
 
+    // Check if joints are too close from position limits
+    const bool lim_lower = ((pos - 0.95 * q_lim_lower).array() < 0.0).any();
+    const bool lim_upper = ((pos - 0.95 * q_lim_upper).array() > 0.0).any();
+    if (lim_lower || lim_upper) {
+      std::cout << "Pos threshold breached!!!" << std::endl;
+      std::cout << "UP : " << std::fixed << std::setprecision(4) << (0.95 * q_lim_upper).transpose() << std::endl;
+      std::cout << "POS: " << std::fixed << std::setprecision(4) << pos.transpose() << std::endl;
+      std::cout << "LOW: " << std::fixed << std::setprecision(4) << (0.95 * q_lim_lower).transpose() << std::endl;
+      // status_ = STATUS_DAMPING;
+    }
+
+    // Check if joint velocities are too high
+    const bool lim_velocity = ((vel.array().abs() - 12) > 0.0).any();
+    if (lim_velocity) {
+      std::cout << "Velocity threshold breached!!!" << std::endl;
+      std::cout << "VEL: " << std::fixed << std::setprecision(4) << vel.transpose() << std::endl;
+      // status_ = STATUS_DAMPING;
+    }
+
+    // Switch to waiting after initialization
+    if ((status_ == STATUS_INIT) && (time_ > init_duration_)) {
+      status_ = STATUS_WAITING_AIR;
+      std::thread wait_thread(waiting, this);
+      wait_thread.detach();
+    }
+
+    switch (status_) {
+    case STATUS_RUN: {
+      time_run_ += control_dt_;
+
+      /*
+      // Interpolation coefficient to slowly switch PD gains
+      float alpha = 1.0;
+      if (time_run_ < interp_duration_) {
+        alpha = time_run_ / interp_duration_;
+      }
+
+      for (int i = 0; i < kNumMotors; ++i) {
+        motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
+        motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
+        motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+        motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+        motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+      }
+      // Inference to get position targets from the policy
+      policy_out_ = networkInterface_.forward();
+      for (int i = 0; i < 10; ++i) {
+        policy_log_[i] = policy_out_[i];
+      }
+
+      if (time_run_ < interp_duration_) {
+        break;
+      }
+      */
+
+      // Refresh joystick
+      if (USE_JOYSTICK) {
+        cmd_ = joy_.getVRef();
+
+        for (int i = 0; i < 6; ++i) {
+          if (std::abs(cmd_(i)) < 0.1) {cmd_(i) = 0.0;}
+        }
+
+        //std::cout << cmd_.transpose() << std::endl;
+        // cmd_ = Vector6::Zero();
+        // cmd_(0) = 0.4;
+
+        /*cmd_ = Vector6::Zero();
+        cmd_(0) = std::min(0.4, 0.4 * time_run_ / 1.0);
+        // cmd_(5) = 0.0;
+        if (time_run_ > 5.0) {cmd_(0) = 0.0; cmd_(5) = 0.0;}*/
+
+        if (joy_.getCross()) {status_ = STATUS_DAMPING;}
+
+      } else {
+        cmd_ = Vector6::Zero();
+        cmd_(0) = 0.0;
+      }
+
+      /*
+      time_nonzero += control_dt_;
+      for (int i = 0; i < 6; ++i) {
+        if (std::abs(cmd_(i)) > 0.1) {time_nonzero = 0.0;}
+      }
+
+      // Get [-0.5, 0.5] modulo of gait cycle
+      float phase = std::fmod(1.2 * time_run_, 1.0);
+      if (phase > 0.5) {phase -= 1.0;}
+
+      // Change gait mode during double support phase
+      if (-0.1 < phase && phase < 0.1) {
+        if (time_nonzero == 0.0) {loco_mode = 0.0;}
+        if (time_nonzero > 2.0) {loco_mode = 1.0;}
+      }
+      */
+
+      //std::cout << "LOCO " << loco_mode << std::endl;
+
+      Vector3 rpy(bs_tmp_ptr->rpy.data());
+      Vector4 ori(bs_tmp_ptr->quat.data());
+      Vector3 gyro(bs_tmp_ptr->omega.data());
+
+      // std::cout << rpy.transpose() << std::endl;
+
+      // Update observation vector (ManiSkill)
+      networkInterface_.update_observation_ManiSkill(pos.head(19), vel.head(19), tau.head(19), rpy,
+                                                  quatPermut * ori, gyro, cmd_, time_run_);
+
+      // Inference to get position targets from the policy (ManiSkill)
+      policy_out_ = networkInterface_.forward_ManiSkill();
+
+      /*
+      // Update observation vector (Mujoco)
+      networkInterface_.update_observation_with_clock(pos.head(19), vel.head(19), tau.head(19), rpy,
+                                                  quatPermut * ori,  gyro, cmd_, 0.5 + time_run_);
+      
+      // Inference to get position targets from the policy (Mujoco)
+      policy_out_ = networkInterface_.forward();
+      */
+
+      /*
+      // DEBUG: Apply sinusoidal torque command to a given joint of both legs
+      policy_out_ = Vxf::Zero(19);
+      policy_out_ += q_init_.head(19);
+      float freq = 1.0; //std::floor(time_run_ / 2) + 1;
+      float tgt = 2.0 * std::sin(2 * pi_v * freq * time_run_);
+      const int Ni = 3;
+      policy_out_(Ni) = policy_out_(Ni);// + tgt;
+      policy_out_(Ni + 5) = policy_out_(Ni + 5);// - tgt;
+
+      if (time_run_ > 6.0) {
+        status_ = STATUS_DAMPING;
+      }
+      */
+
+      // Check policy output size
+      assert(policy_out_.rows() == 19);
+
+      // Logging policy output
+      for (int i = 0; i < policy_out_.rows(); ++i) {
+        policy_log_[i] = policy_out_[i];
+      }
+
+      //std::cout << policy_out_.transpose() << std::endl;
+      /* std::cout << policy_out_.rows() << std::endl;*/
+      //std::cout << "ActDim: " << networkInterface_.get_actDim() << std::endl;
+
+      // Send policy commands to the robot
+      Vxf network_cmd = policy_out_;
+
+      /*
+      network_cmd = q_init_;
+      float pulse = std::fmod(time_run_, 2.0);
+      float offset = 0.0;
+      if (pulse > 1.0) {offset = -0.2;}
+      network_cmd(1) = q_init_(1) + offset;
+      network_cmd(6) = q_init_(6) + offset;
+      */
+
+      float q_des = 0.f;
+      for (int i = 0; i < kNumMotors; ++i) {
+        q_des = i < networkInterface_.get_actDim() ? network_cmd(i) : q_init_(i);
+        motor_command_tmp.kp.at(moti[i]) = kp_(i);
+        motor_command_tmp.kd.at(moti[i]) = kd_(i);
+        motor_command_tmp.q_ref.at(moti[i]) = q_des;
+        motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+        motor_command_tmp.tau_ff.at(moti[i]) = 0.f; // ((i == 3) || (i == 8)) ? tgt : 0.0;
+      }
+      break;
+    }
+    case STATUS_WAITING_AIR: {
+      // Wait at default configuration
+      for (int i = 0; i < kNumMotors; ++i) {
+        motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
+        motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
+        motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+        motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+        motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+      }
+      break;
+    }
+    case STATUS_GAIN_TRANSITION: {
+
+      bool start = true;
+      if (USE_JOYSTICK) {
+        start = (joy_.getStart()==1);
+      }
+
+      // Interpolation from waiting gains to policy gains
+      float alpha = 0;
+      if (start) {
+        time_run_ += control_dt_;
+        alpha = std::clamp(0.f, 1.f, time_run_ / interp_duration_);
+      }
+
+      // Slowly switch PD gains to policy gains
+      for (int i = 0; i < kNumMotors; ++i) {
+        motor_command_tmp.kp.at(moti[i]) = kp_wait_(i) * (1 - alpha) + kp_(i) * alpha;
+        motor_command_tmp.kd.at(moti[i]) = kd_wait_(i) * (1 - alpha) + kd_(i) * alpha;
+        motor_command_tmp.q_ref.at(moti[i]) = q_init_(i);
+        motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+        motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+      }
+
+      // If transition is over, switch to the policy
+      if (time_run_ >= interp_duration_ && start) {
+        time_run_ = -control_dt_;
+        status_ = STATUS_RUN;
+      }
+      break;
+    }
+    case STATUS_INIT: {
+      // Slowly move to default configuration
+      float ratio = std::clamp(time_, 0.f, init_duration_) / init_duration_;
+      for (int i = 0; i < kNumMotors; ++i) {
+        motor_command_tmp.kp.at(moti[i]) = kp_wait_(i);
+        motor_command_tmp.kd.at(moti[i]) = kd_wait_(i);
+        motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+        motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+
+        float q_des = (q_init_(i) - ms_tmp_ptr->q.at(moti[i])) * ratio +
+                      ms_tmp_ptr->q.at(moti[i]);
+        motor_command_tmp.q_ref.at(moti[i]) = q_des;
+      }
+      break;
+    }
+    default: { // case STATUS_DAMPING:
+      // Emergency damping, no Kp, only Kd with 0 ref vel
+      for (int i = 0; i < kNumMotors; ++i) {
+        motor_command_tmp.kp.at(moti[i]) = 0.f;
+        motor_command_tmp.kd.at(moti[i]) = kd_(i);
+        motor_command_tmp.q_ref.at(moti[i]) = ms_tmp_ptr->q.at(moti[i]);
+        motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
+        motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
+      }
+    }
+    }
+    // Write to command buffer
     motor_command_buffer_.SetData(motor_command_tmp);
+
+    // Log sensors and commands
+    for (int i = 0; i < kNumMotors; ++i) {
+      desired_torques_[i] =
+          motor_command_tmp.kp.at(moti[i]) *
+              (motor_command_tmp.q_ref.at(moti[i]) - ms_tmp_ptr->q.at(moti[i])) +
+          motor_command_tmp.kd.at(moti[i]) *
+              (motor_command_tmp.dq_ref.at(moti[i]) - ms_tmp_ptr->dq.at(moti[i])) +
+          motor_command_tmp.tau_ff.at(moti[i]);
+    }
+    // LogAll();
   }
 }
 
@@ -642,11 +910,6 @@ void HumanoidExample::UpdateTables(bool init) {
   case STATUS_WAITING_AIR:
     std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
     std::cout << "    ┃    Waiting in the air    ┃" << std::endl;
-    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-    break;
-  case STATUS_WAITING_GRD:
-    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-    std::cout << "    ┃   Waiting on the ground  ┃" << std::endl;
     std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
     break;
   case STATUS_GAIN_TRANSITION:

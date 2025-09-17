@@ -75,7 +75,7 @@ public:
   void update_observation_ManiSkill(const Vector19 &pos, const Vector19 &vel,
                                     const Vector19 &tau, const Vector3 &rpy,
                                     const Vector4 &ori, const Vector3 &gyro,
-                                    const Vector6 &cmd, float time, float loco_mode);
+                                    const Vector6 &cmd, float time);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -435,7 +435,7 @@ Vxf Interface::forward_ManiSkill() {
 void Interface::update_observation_ManiSkill(
     const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
     const Vector3 &rpy, const Vector4 &ori, const Vector3 &gyro,
-    const Vector6 &cmd, float time, float loco_mode) {
+    const Vector6 &cmd, float time) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
