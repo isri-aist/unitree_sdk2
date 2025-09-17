@@ -18,6 +18,7 @@ struct MotorCommand {
 struct MotorState {
   std::array<float, kNumMotors> q = {};
   std::array<float, kNumMotors> dq = {};
+  std::array<float, kNumMotors> tau = {};
 };
 
 enum JointIndex {
@@ -49,6 +50,28 @@ enum JointIndex {
   kLeftShoulderYaw = 18,
   kLeftElbow = 19,
 
+};
+
+const int moti[20] = {JointIndex::kLeftHipYaw,
+                      JointIndex::kLeftHipRoll,
+                      JointIndex::kLeftHipPitch,
+                      JointIndex::kLeftKnee,
+                      JointIndex::kLeftAnkle,
+                      JointIndex::kRightHipYaw,
+                      JointIndex::kRightHipRoll,
+                      JointIndex::kRightHipPitch,
+                      JointIndex::kRightKnee,
+                      JointIndex::kRightAnkle,
+                      JointIndex::kWaistYaw,
+                      JointIndex::kLeftShoulderPitch,
+                      JointIndex::kLeftShoulderRoll,
+                      JointIndex::kLeftShoulderYaw,
+                      JointIndex::kLeftElbow,
+                      JointIndex::kRightShoulderPitch,
+                      JointIndex::kRightShoulderRoll,
+                      JointIndex::kRightShoulderYaw,
+                      JointIndex::kRightElbow,
+                      JointIndex::kNotUsedJoint
 };
 
 uint32_t Crc32Core(uint32_t *ptr, uint32_t len) {

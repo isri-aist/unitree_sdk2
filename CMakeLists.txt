@@ -8,6 +8,7 @@ option(BUILD_EXAMPLES "Build examples" ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 ## Chosse build type
 set(default_build_type "Release")
@@ -55,6 +56,54 @@ target_link_libraries(unitree_sdk2 INTERFACE ddsc ddscxx Threads::Threads)
 target_include_directories(unitree_sdk2 INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
+
+## Import fmt, fmtlog and libfort libraries
+target_include_directories(unitree_sdk2 INTERFACE /home/paleziart/git/deploy/install/lib)
+target_include_directories(unitree_sdk2 INTERFACE /home/paleziart/git/deploy/install/include)
+
+find_package(fmt)
+target_link_libraries(unitree_sdk2 INTERFACE fmt::fmt)
+
+target_include_directories(unitree_sdk2 INTERFACE fmtlog)
+
+find_package(libfort)
+target_link_libraries(unitree_sdk2 INTERFACE libfort::fort)
+
+## End Import fmt, fmtlog and libfort libraries
+## Import ONNX Runtime
+
+option(onnxruntime_USE_CUDA "Build with CUDA support" OFF)
+option(onnxruntime_USE_TENSORRT "Build with TensorRT support" OFF)
+include(FetchContent)
+
+set(ONNXRUNTIME_ROOTDIR "/home/paleziart/git/deploy/onnxruntime-linux-x64-1.22.0")
+
+# The ORT package has a different include directory structure to a local install via cmake.
+# We added the path for the pre-built package above. Add the path for a local install to support either usage.
+# TODO: If we want to support additional EPs being loadable from a local install we also need to add EP specific
+# directories under /include/onnxruntime/core/providers
+include_directories("${ONNXRUNTIME_ROOTDIR}/include"                           # Pre-built package
+                    "${ONNXRUNTIME_ROOTDIR}/include/onnxruntime"               # Linux local install to /usr/local
+                    "${ONNXRUNTIME_ROOTDIR}/include/onnxruntime/core/session") # Windows local install
+
+link_directories("${ONNXRUNTIME_ROOTDIR}/lib")
+
+if(onnxruntime_USE_CUDA)
+  add_definitions(-DUSE_CUDA)
+endif()
+if(onnxruntime_USE_TENSORRT)
+  add_definitions(-DUSE_TENSORRT)
+endif()
+if(onnxruntime_USE_DML)
+  message("Enabling DML")
+  add_definitions(-DUSE_DML)
+endif()
+
+add_definitions(-lonnxruntime)
+SET(CMAKE_CXX_FLAGS  "-lonnxruntime")
+target_link_libraries(unitree_sdk2 INTERFACE onnxruntime)
+
+## End Import ONNX Runtime
 
 if (BUILD_EXAMPLES)
     add_subdirectory(example)
