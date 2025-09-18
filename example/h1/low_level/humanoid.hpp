@@ -901,41 +901,44 @@ void HumanoidExample::UpdateTables(bool init) {
     table_misc_[0][3].set_cell_text_align(fort::text_align::center);
   }
 
+  std::string buffer = "";
+  std::string newLine = std::string("\n");
   switch (status_) {
   case STATUS_INIT:
-    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-    std::cout << "    ┃      Initialization      ┃" << std::endl;
-    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    buffer += std::string("    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓") + newLine;
+    buffer += std::string("    ┃      Initialization      ┃") + newLine;
+    buffer += std::string("    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛") + newLine + newLine;
     break;
   case STATUS_WAITING_AIR:
-    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-    std::cout << "    ┃    Waiting in the air    ┃" << std::endl;
-    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    buffer += std::string("    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓") + newLine;
+    buffer += std::string("    ┃    Waiting in the air    ┃") + newLine;
+    buffer += std::string("    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛") + newLine + newLine;
     break;
   case STATUS_GAIN_TRANSITION:
-    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-    std::cout << "    ┃   PD Gains Transition    ┃" << std::endl;
-    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    buffer += std::string("    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓") + newLine;
+    buffer += std::string("    ┃   PD Gains Transition    ┃") + newLine;
+    buffer += std::string("    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛") + newLine + newLine;
     break;
   case STATUS_RUN:
-    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-    std::cout << "    ┃    Running Controller    ┃" << std::endl;
-    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    buffer += std::string("    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓") + newLine;
+    buffer += std::string("    ┃    Running Controller    ┃") + newLine;
+    buffer += std::string("    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛") + newLine + newLine;
     break;
   case STATUS_DAMPING:
-    std::cout << "    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-    std::cout << "    ┃    Emergency Damping!    ┃" << std::endl;
-    std::cout << "    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
+    buffer += std::string("    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓") + newLine;
+    buffer += std::string("    ┃    Emergency Damping!    ┃") + newLine;
+    buffer += std::string("    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛") + newLine + newLine;
     break;
   }
-  std::cout << "    ┏━━━━━━━━━━━━━━━━━━━┓" << std::endl;
-  std::cout << "    ┃    Sensor Data    ┃" << std::endl;
-  std::cout << "    ┗━━━━━━━━━━━━━━━━━━━┛" << std::endl << std::endl;
-  std::cout << table_IMU_.to_string() << std::endl;
-  std::cout << table_legs_.to_string() << std::endl;
-  std::cout << table_arms_.to_string() << std::endl;
-  std::cout << table_misc_.to_string() << std::endl;
-  std::cout << "Time: " << time_ << std::endl;
+  buffer += std::string("    ┏━━━━━━━━━━━━━━━━━━━┓") + newLine;
+  buffer += std::string("    ┃    Sensor Data    ┃") + newLine;
+  buffer += std::string("    ┗━━━━━━━━━━━━━━━━━━━┛") + newLine + newLine;
+  buffer += table_IMU_.to_string() + newLine;
+  buffer += table_legs_.to_string() + newLine;
+  buffer += table_arms_.to_string() + newLine;
+  buffer += table_misc_.to_string() + newLine;
+  buffer += std::string("Time: ") + std::to_string(time_) + newLine;
+  std::cout << buffer << std::flush;
 }
 
 ////
