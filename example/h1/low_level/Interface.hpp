@@ -8,6 +8,8 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 
 #include "OnnxWrapper.hpp"
@@ -133,6 +135,9 @@ public:
   Vxf pTarget_, q_ref_, obs_, actorObs_, studentObs_, historyObs_,
       historyTempObs_, latentOut_, actions_, estim_vel_, h_gru_;
   Vxf last_actions_; // , last_dof_pos_, last_dof_vel_;
+  Vxf action_scale_;
+  Vxf meta_default_qref_;
+  bool has_meta_default_qref_;
   int obsDim_, actDim_, obsDim_estim_, actDim_estim_;
   int historyLength_, historySamples_, historyStep_, iter_;
   float dt_;
@@ -152,6 +157,9 @@ public:
   // Related to orientation
   Vector3 _bodyOri, _bodyAngularVel, _gravityVec, _qa, _qb, _qc, _qvec;
   Vector4 _bodyQuat;
+
+  bool load_metadata_scale_and_default_qref(const std::filesystem::path &model_path);
+  std::vector<float> parse_csv_floats(const std::string &csv) const;
 };
 
 Interface::Interface() {
@@ -162,6 +170,8 @@ Interface::Interface() {
   hist_pos_lower.fill(0.0);
   hist_vel_lower.fill(0.0);
   hist_act_lower.fill(0.0);
+
+  has_meta_default_qref_ = false;
 
   // History is not used for now so we can hardcode 1s
   historySamples_ = 1;
@@ -174,15 +184,24 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
                            const Vxf &q_ref, float dt) {
 
   // Initialize ONNX framework
-  std::basic_string<ORTCHAR_T> actor_file = model_file;
-  actor_file.append("_actor.onnx");
-  std::basic_string<ORTCHAR_T> estim_file = model_file;
-  estim_file.append("_estimator.onnx");
-  policy_actor_ = std::make_shared<OnnxWrapper>(actor_file);
+  std::filesystem::path model_path(model_file);
+  const bool has_extension = model_path.has_extension();
+  std::filesystem::path base_path = model_path;
+  if (has_extension) {
+    base_path.replace_extension();
+  }
+
+  std::filesystem::path actor_path = model_path;
+  if (!std::filesystem::exists(actor_path)) {
+    std::cerr << "[Interface] Actor model not found. Checked: " << model_path
+              << " and " << actor_path << std::endl;
+  }
+
+  policy_actor_ = std::make_shared<OnnxWrapper>(actor_path.native());
   policy_actor_->initialize();
 
-  policy_estim_ = std::make_shared<OnnxWrapper>(estim_file);
-  policy_estim_->initialize();
+  // policy_estim_ = std::make_shared<OnnxWrapper>(estim_file);
+  // policy_estim_->initialize();
 
   // Retrieve info about networks
   obsDim_ = policy_actor_->get_obsDim();
@@ -190,10 +209,11 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
   std::cout << "Actor Network parameters: " << std::endl;
   std::cout << "obsDim: " << obsDim_ << " | actDim: " << actDim_ << std::endl;
 
-  obsDim_estim_ = policy_estim_->get_obsDim();
+  
+  /*obsDim_estim_ = policy_estim_->get_obsDim();
   actDim_estim_ = policy_estim_->get_actDim();
   std::cout << "Actor Network parameters: " << std::endl;
-  std::cout << "obsDim: " << obsDim_estim_ << " | actDim: " << actDim_estim_ << std::endl;
+  std::cout << "obsDim: " << obsDim_estim_ << " | actDim: " << actDim_estim_ << std::endl;*/
 
   // Initialize some tensors
   obs_ = Vxf::Zero(obsDim_);
@@ -202,16 +222,23 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
   historyObs_ = Vxf::Zero(obsDim_ * historyLength_);
   historyTempObs_ = Vxf::Zero(obsDim_ * historyLength_);
   actions_ = Vxf::Zero(actDim_);
+  action_scale_ = Vxf::Ones(actDim_);
   last_actions_ = Vxf::Zero(actDim_);
   pTarget_ = Vxf::Zero(actDim_);
   estim_vel_ = Vxf::Zero(6);
   h_gru_ = Vxf::Zero(128);
+
+  load_metadata_scale_and_default_qref(actor_path);
   /*last_actions_ = Eigen::MatrixXf::Zero(nJoints, 6);
   last_dof_pos_ = Eigen::MatrixXf::Zero(nJoints, 6);
   last_dof_vel_ = Eigen::MatrixXf::Zero(nJoints, 6);*/
 
   // Reference position around which to apply the actions
-  q_ref_ = q_ref;
+  if (has_meta_default_qref_ && meta_default_qref_.size() == q_ref.size()) {
+    q_ref_ = meta_default_qref_;
+  } else {
+    q_ref_ = q_ref;
+  }
 
   // Initial phases
   phases_freq_.setZero();
@@ -279,6 +306,72 @@ void Interface::update_observation_with_clock(
 
   // Iteration counter
   iter_++;
+}
+
+std::vector<float> Interface::parse_csv_floats(const std::string &csv) const {
+  std::vector<float> out;
+  std::stringstream ss(csv);
+  std::string item;
+  while (std::getline(ss, item, ',')) {
+    try {
+      out.push_back(std::stof(item));
+    } catch (...) {
+    }
+  }
+  return out;
+}
+
+bool Interface::load_metadata_scale_and_default_qref(const std::filesystem::path &model_path) {
+  has_meta_default_qref_ = false;
+  // Only available for actor model.
+  if (!policy_actor_) {
+    return false;
+  }
+  bool scale_set = false;
+  std::string csv;
+  if (policy_actor_->get_metadata_value("action_scale", csv)) {
+    auto vals = parse_csv_floats(csv);
+    if (!vals.empty()) {
+      if (static_cast<int>(vals.size()) == actDim_) {
+        action_scale_ = Eigen::Map<Vxf>(vals.data(), vals.size());
+        scale_set = true;
+      } else {
+        std::cerr << "[Interface] action_scale metadata size mismatch: " << vals.size()
+                  << " vs actDim " << actDim_ << std::endl;
+      }
+    }
+  }
+  if (policy_actor_->get_metadata_value("default_joint_pos", csv)) {
+    auto vals = parse_csv_floats(csv);
+    if (!vals.empty()) {
+      if (static_cast<int>(vals.size()) == actDim_) {
+        meta_default_qref_ = Eigen::Map<Vxf>(vals.data(), vals.size());
+        has_meta_default_qref_ = true;
+      } else {
+        std::cerr << "[Interface] default_joint_pos metadata size mismatch: " << vals.size()
+                  << " vs actDim " << actDim_ << std::endl;
+      }
+    }
+  }
+  // Fallback to known mjlab defaults if metadata not available (older ORT without metadata API).
+  if (!scale_set && actDim_ == 19) {
+    static const float kDefaultScale[19] = {0.2250f, 0.2250f, 0.2250f, 0.2330f, 0.2370f,
+                                            0.2250f, 0.2250f, 0.2250f, 0.2330f, 0.2370f,
+                                            0.1500f, 0.4380f, 0.4380f, 0.4380f, 0.4380f,
+                                            0.4380f, 0.4380f, 0.4380f, 0.4380f};
+    action_scale_ = Eigen::Map<const Vxf>(kDefaultScale, 19);
+    std::cerr << "[Interface] action_scale metadata missing; using mjlab defaults." << std::endl;
+  }
+  if (!has_meta_default_qref_ && actDim_ == 19) {
+    static const float kDefaultQref[19] = {0.0f,  -0.02f, -0.4f, 0.8f,  -0.4f,
+                                           0.0f,  -0.02f, -0.4f, 0.8f,  -0.4f,
+                                           0.0f,  0.0f,   0.0f,  0.0f,  0.0f,
+                                           0.0f,  0.0f,   0.0f,  0.0f};
+    meta_default_qref_ = Eigen::Map<const Vxf>(kDefaultQref, 19);
+    has_meta_default_qref_ = true;
+    std::cerr << "[Interface] default_joint_pos metadata missing; using mjlab defaults." << std::endl;
+  }
+  return has_meta_default_qref_;
 }
 
 void Interface::update_observation(const Vector19 &pos, const Vector19 &vel,
@@ -358,20 +451,8 @@ Vector19 Interface::reorder_obs(const Vector19 &v) {
 }
 
 Vxf Interface::reorder_act(const Vxf &v) {
-
-  // From ManiSkill order to URDF order
-  Vxf out = Vxf::Zero(19);
-  /*int idx[19] = {0, 3, 7, 11, 15, 1, 4, 8, 12, 16, // Legs
-                 2, // Torso
-                 5, 9, 13, 17, 6, 10, 14, 18};  // Arms
-  for (int i = 0; i < 19; i++) {
-    out[i] = v[idx[i]];
-  } */
-  int idx[10] = {0, 2, 4, 6, 8, 1, 3, 5, 7, 9};         
-  for (int i = 0; i < 10; i++) {
-    out[i] = v[idx[i]];
-  }
-  return out;
+  // mjlab ONNX uses motor/natural joint order already; keep identity.
+  return v;
 }
 
 Vxf Interface::forward_ManiSkill() {
@@ -418,9 +499,31 @@ Vxf Interface::forward_ManiSkill() {
   actions_[17] = 0.0;
   actions_[18] = 0.0; */
 
+  /*if (iter_ < 200) {
+  actions_ << -0.1506,  0.1241,  0.0025, -0.3543,  0.6767,  0.0049, -0.0076, -0.0899,
+         -0.5155,  0.2288,  0.0218, -0.0599, -0.1345, -0.0472, -0.2006, -0.0569,
+         -0.0259,  0.0666, -0.0727;}*/
+
+  /*const Vector19 scale = {0.2250, 0.2250, 0.2250, 0.2333, 0.2375, 0.2250, 0.2250, 0.2250, 0.2333,
+         0.2375, 0.1500, 0.4375, 0.4375, 0.4375, 0.4375, 0.4375, 0.4375, 0.4375,
+         0.4375};*/
+
+  // actions_.fill(0.5);
+    
   // Target joint positions based on scaled actions
-  assert(q_ref_.rows() == reorder_act(actions_).rows());
-  pTarget_ = q_ref_ + reorder_act(actions_); //  + 0.25 * last_actions_ ;
+  Vxf scale = action_scale_.size() == actions_.size() ? action_scale_ : Vxf::Ones(actions_.size());
+  Vxf scaled_actions = scale.array() * actions_.array();
+  if (scaled_actions.size() != q_ref_.rows()) {
+    std::cerr << "[Interface] Action dimension mismatch: policy outputs "
+              << scaled_actions.size() << ", expected " << q_ref_.rows() << std::endl;
+    scaled_actions.conservativeResize(q_ref_.rows());
+  }
+  assert(q_ref_.rows() == scaled_actions.rows());
+  pTarget_ = q_ref_ + scaled_actions; //  + 0.25 * last_actions_ ;
+
+  std::cout << "== ACTIONS ==" << std::endl;
+  std::cout << scale.array() << std::endl;
+  std::cout << q_ref_.transpose() << std::endl;
 
   assert(pTarget_.rows() == q_ref_.rows());
 
@@ -439,10 +542,40 @@ void Interface::update_observation_ManiSkill(
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
+  // Fast path for mjlab-style policy with obsDim ~= 66
+  if (obsDim_ <= 70) {
+    _bodyQuat = ori;
+    transformBodyQuat();
+    Vector3 projected_gravity = -1.0f * _bodyOri;
+
+    // Flatten to: base_ang_vel(3), projected_gravity(3), pos-q_ref_(19), vel(19), actions_(19), cmd(x,y,yaw)
+    Eigen::Index idx = 0;
+    obs_.segment<3>(idx) = gyro;
+    idx += 3;
+    obs_.segment<3>(idx) = projected_gravity;
+    idx += 3;
+    obs_.segment<19>(idx) = pos - q_ref_;
+    idx += 19;
+    obs_.segment<19>(idx) = vel;
+    idx += 19;
+    obs_.segment<19>(idx) = actions_;
+    idx += 19;
+    obs_.segment<3>(idx) << cmd(0), cmd(1), cmd(5);
+    idx += 3;
+    if (idx != obsDim_) {
+      std::cerr << "[Interface] Observation packing mismatch (compact path): expected "
+                << obsDim_ << " got " << idx << std::endl;
+    }
+    iter_++;
+    return;
+  }
+
   // Projected gravity based on orientation state
-  // _bodyQuat = ori;
-  // transformBodyQuat(); // this update _bodyOri
-  // Vector3 projected_gravity = _bodyOri;
+  _bodyQuat = ori;
+  transformBodyQuat(); // this update _bodyOri
+  Vector3 projected_gravity = -1.0 * _bodyOri;
+
+  //std::cout << projected_gravity.transpose() << std::endl;
 
   float roll = rpy(0);
   float pitch = rpy(1);
@@ -453,8 +586,8 @@ void Interface::update_observation_ManiSkill(
   // base_ang_vel.head(2) *= -1;  // Invert x y to abide by simulation convention
   
   Vector10 pos_lower, vel_lower, act_lower;
-  Vector19 reordered_pos = reorder_obs(pos);
-  Vector19 reordered_vel = reorder_obs(vel);
+  Vector19 reordered_pos = pos; // reorder_obs(pos);
+  Vector19 reordered_vel = vel; // reorder_obs(vel);
 
   std::array<int, 10> idx = {0, 1, 3, 4, 7, 8, 11, 12, 15, 16};
   for (size_t i = 0; i < idx.size(); ++i) {
@@ -483,7 +616,18 @@ void Interface::update_observation_ManiSkill(
   //std::cout << hist_base_ang_vel.col(0).transpose() << std::endl;
 
   // Filling observation vector
-  obs_ << hist_base_ang_vel.col(0) * 0.25,
+  obs_ << gyro,
+          projected_gravity,
+          pos - q_ref_,
+          vel,
+          actions_,
+          cmd(0),
+          cmd(1),
+          cmd(5);
+
+
+  
+          /*hist_base_ang_vel.col(0) * 0.25,
           hist_base_ang_vel.col(1) * 0.25,
           hist_base_ang_vel.col(2) * 0.25,
           hist_roll_pitch.col(0),
@@ -497,16 +641,16 @@ void Interface::update_observation_ManiSkill(
           hist_vel_lower.col(2) * 0.05,
           hist_act_lower.col(0),
           hist_act_lower.col(1),
-          hist_act_lower.col(2),
+          hist_act_lower.col(2),*/
           /*reorder_obs(pos),
           reorder_obs(vel),
           actions_,
           loco_mode,*/
-          std::cos(phase),
+          /*std::cos(phase),
           std::sin(phase),
           cmd(0),
           cmd(1),
-          cmd(5);
+          cmd(5);*/
           /*Vxf::Zero(6),
           hist_base_ang_vel.col(0),
           hist_roll_pitch.col(0),
@@ -521,6 +665,14 @@ void Interface::update_observation_ManiSkill(
           Vxf::Zero(6);*/
           // Vxf::Zero(4); // Unused by actor but was there for critic
           //Vxf::Zero(319); // Unused by actor
+
+  // std::cout << "= STEP = " << std::endl;
+  // std::cout << obs_.transpose() << std::endl;
+  // if (time > 0.1) {exit(-1);}
+
+  // obs_.fill(1.0);
+
+  // std::cout << obs_.rows() << obsDim_ << std::endl;
 
   assert(obs_.rows() == obsDim_);
 
