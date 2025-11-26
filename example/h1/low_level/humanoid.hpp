@@ -44,7 +44,8 @@ void waiting(HumanoidExample *HE);
 class HumanoidExample {
 public:
   HumanoidExample(const std::string &networkInterface = "",
-                  const std::string &model_file = "")
+                  const std::string &model_file = "",
+                  const std::string &kpScaling = "0.0")
       : networkInterface_() {
 
     unitree::robot::ChannelFactory::Instance()->Init(1, "lo");
@@ -94,10 +95,7 @@ public:
         &HumanoidExample::UpdateTables, this, false);
 
     // Scale the policy control gains
-    // kp_ *= 0.0;
-    // kd_ *= 0.0;
-    // kp_wait_ *= 0.0;
-    // kd_wait_ *= 0.0;
+    kp_ *= std::stof(kpScaling);
   
     // Create the link with the joystick
     if (USE_JOYSTICK) {
@@ -115,7 +113,10 @@ public:
         this);
 
     // Create link with network interface
-    networkInterface_.initialize(model_file, q_init_.head(19), control_dt_);
+    networkInterface_.initialize(model_file, control_dt_);
+    Vxf interfaceDefaultQref = networkInterface_.get_default_qref();
+    assert(interfaceDefaultQref.size() == 19);
+    q_init_.head(19) = interfaceDefaultQref;
     policy_out_ = Vxf::Zero(networkInterface_.get_actDim());
 
     // Initialize tables for console display
@@ -245,10 +246,8 @@ private:
   float time_log_ = 0.f;
 
   // Default configuration
-  const Vector20 q_init_{
-      0.0, 0.0, -0.2, 0.6, -0.4, 0.0, 0.0, -0.2,  0.6, -0.4, // Legs
-      0.0, 0.4,  0.0, 0.0, -0.4, 0.4, 0.0,  0.0, -0.4,       // Torso and arms
-      0.0};                                                  // Unused joint
+  Vector20 q_init_;
+
   const Vector20 q_lim_lower{-0.43, -0.43, -3.14, -0.26, -0.87,
                              -0.43, -0.43, -3.14, -0.26, -0.87, // Legs
                              -2.35, -2.87, -0.34, -1.3,  -1.25,
@@ -263,12 +262,12 @@ private:
   // Proportional derivative gains
   Vector20 kp_{200.0, 200.0, 200.0, 300.0, 40.0,
                200.0, 200.0, 200.0, 300.0, 40.0, // Legs
-               300.0, 40.0, 40.0, 40.0, 40.0,
-               40.0, 40.0, 40.0, 40.0, // Torso and arms
+               300.0, 20.0, 20.0, 20.0, 20.0,
+               20.0, 20.0, 20.0, 20.0, // Torso and arms
                0.0};                   // Unused joint
 
   Vector20 kd_{5.0, 5.0, 5.0, 6.0, 2.0, 5.0, 5.0, 5.0, 6.0, 2.0, // Legs
-               6.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, // Torso and arms
+               6.0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, // Torso and arms
               0.0};
 
   Vector20 kp_wait_{1500.0, 1500.0, 1500.0, 1500.0, 1500.0,
@@ -523,23 +522,12 @@ void HumanoidExample::Control() {
       Vector4 ori(bs_tmp_ptr->quat.data());
       Vector3 gyro(bs_tmp_ptr->omega.data());
 
-      // std::cout << rpy.transpose() << std::endl;
+      // Update observation vector
+      networkInterface_.update_observation(pos.head(19), vel.head(19), tau.head(19), rpy,
+                                           quatPermut * ori, gyro, cmd_, time_run_);
 
-      // Update observation vector (ManiSkill)
-      networkInterface_.update_observation_ManiSkill(pos.head(19), vel.head(19), tau.head(19), rpy,
-                                                  quatPermut * ori, gyro, cmd_, time_run_);
-
-      // Inference to get position targets from the policy (ManiSkill)
-      policy_out_ = networkInterface_.forward_ManiSkill();
-
-      /*
-      // Update observation vector (Mujoco)
-      networkInterface_.update_observation_with_clock(pos.head(19), vel.head(19), tau.head(19), rpy,
-                                                  quatPermut * ori,  gyro, cmd_, 0.5 + time_run_);
-      
-      // Inference to get position targets from the policy (Mujoco)
+      // Inference to get position targets from the policy
       policy_out_ = networkInterface_.forward();
-      */
 
       /*
       // DEBUG: Apply sinusoidal torque command to a given joint of both legs
