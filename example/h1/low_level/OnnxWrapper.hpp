@@ -14,9 +14,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <onnxruntime_cxx_api.h>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Types.h"
@@ -94,8 +96,22 @@ public:
 
   int get_obsDim(int i = 0) { return total_numbers_elements_.at(i); }
   int get_actDim(int i = 0) { return calculate_product(outputs_shapes_.at(0)); }
+  bool get_metadata_value(const std::string &key, std::string &value) const {
+    auto it = metadata_.find(key);
+    if (it == metadata_.end()) {
+      return false;
+    }
+    value = it->second;
+    return true;
+  }
 
 private:
+  // Keep a shared environment alive for the lifetime of all sessions.
+  static Ort::Env &GetEnv() {
+    static Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "unitree-sdk2");
+    return env;
+  }
+
   std::shared_ptr<Ort::Session> session_; // ONNX Runtime session
 
   std::vector<std::vector<std::int64_t>> inputs_shapes_;  // Shapes of the inputs of the network
@@ -105,14 +121,13 @@ private:
 
   std::vector<int> total_numbers_elements_; // Total number of elements in the inputs of the
                                             // network
+  std::unordered_map<std::string, std::string> metadata_;
 };
 
 OnnxWrapper::OnnxWrapper(std::basic_string<ORTCHAR_T> model_file) {
   // onnxruntime setup
-  Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "example-model-explorer");
   Ort::SessionOptions session_options;
-  session_ =
-      std::make_shared<Ort::Session>(env, model_file.c_str(), session_options);
+  session_ = std::make_shared<Ort::Session>(GetEnv(), model_file.c_str(), session_options);
 }
 
 std::string OnnxWrapper::print_shape(const std::vector<std::int64_t> &v) {
@@ -183,6 +198,10 @@ void OnnxWrapper::initialize() {
   for (std::size_t i = 0; i < inputs_names_.size(); i++) {
     total_numbers_elements_.push_back(calculate_product(inputs_shapes_.at(i)));
   }
+
+  // Grab custom metadata if available.
+  // Note: older ONNX Runtime C++ wrappers might not expose metadata accessors.
+  metadata_.clear();
 
   // Create Ort tensors of random numbers in the range [0, 255]
   std::cout << "Constructing dummy tensors of random values." << std::endl;
