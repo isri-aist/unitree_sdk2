@@ -27,7 +27,7 @@
 
 #include <unitree/robot/b2/motion_switcher/motion_switcher_client.hpp>
 
-#define USE_JOYSTICK false
+#define USE_JOYSTICK true
 
 #define STATUS_INIT 0
 #define STATUS_WAITING_AIR 1
@@ -47,8 +47,8 @@ public:
                   const std::string &model_file = "")
       : networkInterface_() {
 
-    unitree::robot::ChannelFactory::Instance()->Init(1, "lo");
-    // unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
+    // unitree::robot::ChannelFactory::Instance()->Init(1, "lo");
+    unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
 
     msc.reset(new unitree::robot::b2::MotionSwitcherClient());
