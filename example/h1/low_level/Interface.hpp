@@ -120,8 +120,9 @@ public:
   // History quantities
   const static int N_hist = 3;
   Eigen::Matrix<float, 3, N_hist> hist_base_ang_vel;
+  Eigen::Matrix<float, 3, N_hist> hist_projected_gravity;
   Eigen::Matrix<float, 2, N_hist> hist_roll_pitch;
-  Eigen::Matrix<float, 10, N_hist> hist_pos_lower, hist_vel_lower, hist_act_lower;
+  Eigen::Matrix<float, 19, N_hist> hist_pos, hist_vel, hist_act;
 
   // Related to leg phases
   Vector2 phases_freq_;
@@ -139,10 +140,11 @@ Interface::Interface() {
 
   // Fill history quantities
   hist_base_ang_vel.fill(0.0);
+  hist_projected_gravity.fill(0.0);
   hist_roll_pitch.fill(0.0);
-  hist_pos_lower.fill(0.0);
-  hist_vel_lower.fill(0.0);
-  hist_act_lower.fill(0.0);
+  hist_pos.fill(0.0);
+  hist_vel.fill(0.0);
+  hist_act.fill(0.0);
 
   has_meta_default_qref_ = false;
 
@@ -364,16 +366,38 @@ void Interface::update_observation(
   transformBodyQuat();
   Vector3 projected_gravity = -1.0f * _bodyOri;
 
+  // Roll history
+  for (int i = hist_base_ang_vel.cols() - 1; i > 0; i--) {
+    hist_base_ang_vel.col(i) = hist_base_ang_vel.col(i - 1);
+    hist_projected_gravity.col(i) = hist_projected_gravity.col(i - 1);
+    hist_pos.col(i) = hist_pos.col(i - 1);
+    hist_vel.col(i) = hist_vel.col(i - 1);
+    hist_act.col(i) = hist_act.col(i - 1);
+  }
+  hist_base_ang_vel.col(0) = gyro;
+  hist_projected_gravity.col(0) = projected_gravity;
+  hist_pos.col(0) = pos - q_ref_;
+  hist_vel.col(0) = vel;
+  hist_act.col(0) = actions_;
+
   // Flatten to: base_ang_vel(3), projected_gravity(3), pos-q_ref_(19), vel(19), actions_(19), cmd(x,y,yaw)
   Eigen::Index idx = 0;
-  obs_.segment<3>(idx) = gyro;
-  idx += 3;
-  obs_.segment<3>(idx) = projected_gravity;
-  idx += 3;
-  obs_.segment<19>(idx) = pos - q_ref_;
+  for (int i = 0; i < 3; i++) {
+    obs_.segment<3>(idx) = hist_base_ang_vel.col(2 - i);
+    idx += 3;
+  }
+  for (int i = 0; i < 3; i++) {
+    obs_.segment<3>(idx) = hist_projected_gravity.col(2 - i);
+    idx += 3;
+  }
+  for (int i = 0; i < 3; i++) {
+    obs_.segment<19>(idx) = hist_pos.col(2 - i);
   idx += 19;
-  obs_.segment<19>(idx) = vel;
+  }
+  for (int i = 0; i < 3; i++) {
+    obs_.segment<19>(idx) = hist_vel.col(2 - i);
   idx += 19;
+  }
   obs_.segment<19>(idx) = actions_;
   idx += 19;
   obs_.segment<3>(idx) << cmd(0), cmd(1), cmd(5);
