@@ -69,6 +69,20 @@ public:
         sleep(5);
     }
 
+    // Scale the policy control gains
+    kp_ *= std::stof(kpScaling);
+
+    // Create the link with the joystick
+    if (USE_JOYSTICK) {
+      joy_.initialize(control_dt_);
+    }
+
+    // Create link with network interface
+    networkInterface_.initialize(model_file, control_dt_);
+    Vxf interfaceDefaultQref = networkInterface_.get_default_qref();
+    assert(interfaceDefaultQref.size() == 19);
+    q_init_.head(19) = interfaceDefaultQref;
+
     lowcmd_publisher_.reset(
         new unitree::robot::ChannelPublisher<unitree_go::msg::dds_::LowCmd_>(
             kTopicLowCommand));
@@ -94,14 +108,6 @@ public:
         "report_sensors", UT_CPU_ID_NONE, report_period_us,
         &HumanoidExample::UpdateTables, this, false);
 
-    // Scale the policy control gains
-    kp_ *= std::stof(kpScaling);
-  
-    // Create the link with the joystick
-    if (USE_JOYSTICK) {
-      joy_.initialize(control_dt_);
-    }
-
     int joystick_period_us = 0.001 * 1e6;
     joystick_thread_ptr_ = unitree::common::CreateRecurrentThreadEx(
         "joystick", UT_CPU_ID_NONE, joystick_period_us, &HumanoidExample::ReadJoystick,
@@ -112,11 +118,6 @@ public:
         "logging", UT_CPU_ID_NONE, logging_period_us, &HumanoidExample::LogAll,
         this);
 
-    // Create link with network interface
-    networkInterface_.initialize(model_file, control_dt_);
-    Vxf interfaceDefaultQref = networkInterface_.get_default_qref();
-    assert(interfaceDefaultQref.size() == 19);
-    q_init_.head(19) = interfaceDefaultQref;
     policy_out_ = Vxf::Zero(networkInterface_.get_actDim());
 
     // Initialize tables for console display
