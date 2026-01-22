@@ -383,6 +383,22 @@ void Interface::update_observation(
 
   // Flatten to: base_ang_vel(3), projected_gravity(3), pos-q_ref_(19), vel(19), actions_(19), cmd(x,y,yaw)
   Eigen::Index idx = 0;
+  obs_.segment<3>(idx) = hist_base_ang_vel.col(0);
+  idx += 3;
+  obs_.segment<3>(idx) = hist_projected_gravity.col(0);
+  idx += 3;
+  obs_.segment<19>(idx) = hist_pos.col(0);
+  idx += 19;
+  obs_.segment<19>(idx) = hist_vel.col(0);
+  idx += 19;
+  obs_.segment<19>(idx) = actions_;
+  idx += 19;
+  obs_.segment<3>(idx) << cmd(0), cmd(1), cmd(5);
+  idx += 3;
+  const float freq = 1.0;
+  obs_.segment<2>(idx) << std::sin(2 * pi_v * freq * time), std::cos(2 * pi_v * freq * time);
+  idx += 2;
+  /*
   for (int i = 0; i < 3; i++) {
     obs_.segment<3>(idx) = hist_base_ang_vel.col(2 - i);
     idx += 3;
@@ -403,6 +419,7 @@ void Interface::update_observation(
   idx += 19;
   obs_.segment<3>(idx) << cmd(0), cmd(1), cmd(5);
   idx += 3;
+  */
   if (idx != obsDim_) {
     std::cerr << "[Interface] Observation packing mismatch (compact path): expected "
               << obsDim_ << " got " << idx << std::endl;
