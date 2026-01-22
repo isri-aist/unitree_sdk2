@@ -340,7 +340,7 @@ Vxf Interface::forward() {
   if (scaled_actions.size() != q_ref_.rows()) {
     std::cerr << "[Interface] Action dimension mismatch: policy outputs "
               << scaled_actions.size() << ", expected " << q_ref_.rows() << std::endl;
-    throw std::runtime_error("[Error] Action dimension mismatch.")
+    throw std::runtime_error("[Error] Action dimension mismatch.");
     return q_ref_;
   }
   assert(q_ref_.rows() == scaled_actions.rows());
