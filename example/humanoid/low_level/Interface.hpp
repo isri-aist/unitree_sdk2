@@ -13,6 +13,10 @@
 #include "OnnxWrapper.hpp"
 #include "Types.h"
 
+#define ORIGIN_TO_BOX 0
+#define BOX_TO_TABLE 1
+#define TABLE_TO_ORIGIN 2
+
 constexpr float pi_v = 3.14159265358979323846;
 
 class Interface {
@@ -40,7 +44,10 @@ public:
   /// apply the actions \param[in] dt Control time step
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void initialize(std::basic_string<ORTCHAR_T> model_file, const Vxf &q_ref,
+  void initialize(std::basic_string<ORTCHAR_T> model_file1,
+		  std::basic_string<ORTCHAR_T> model_file2,
+		  std::basic_string<ORTCHAR_T> model_file3,
+		  const Vxf &q_ref,
                   float dt);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +55,7 @@ public:
   /// \brief  Forward pass
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vxf forward();
+  Vxf forward(const int & select);
   Vxf forward_ManiSkill(); // Forward pass with ManiSkill policy
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,7 +82,7 @@ public:
   void update_full_body_observation(const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
 				    const Vector3 &obj_pos, const Vector3 &obj_rot0, const Vector3 &obj_rot1,
 				    const Vector3 &rpy, const Vector3 &gyro,
-				    float time);
+				    const float &mimic_phase, const float &gait_phase);
   void update_observation_ManiSkill(const Vector19 &pos, const Vector19 &vel,
                                     const Vector19 &tau, const Vector3 &rpy,
                                     const Vector4 &ori, const Vector3 &gyro,
@@ -126,11 +133,11 @@ public:
             .count());
   }
 
-  int get_obsDim() { return policy_->get_obsDim(); }
-  int get_actDim() { return policy_->get_actDim(); }
+  int get_obsDim() { return policy1_->get_obsDim(); }
+  int get_actDim() { return policy1_->get_actDim(); }
 
   // Control policy
-  std::shared_ptr<OnnxWrapper> policy_;
+  std::shared_ptr<OnnxWrapper> policy1_, policy2_, policy3_;
 
   // Misc
   Vector3 vel_command_ = Vector3::Zero();
@@ -160,16 +167,26 @@ Interface::Interface() {
   iter_ = 0;
 }
 
-void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
+void Interface::initialize(std::basic_string<ORTCHAR_T> model_file1,
+			   std::basic_string<ORTCHAR_T> model_file2,
+                           std::basic_string<ORTCHAR_T> model_file3,
                            const Vxf &q_ref, float dt) {
 
   // Initialize ONNX framework
-  policy_ = std::make_shared<OnnxWrapper>(model_file);
-  policy_->initialize();
+  policy1_ = std::make_shared<OnnxWrapper>(model_file1);
+  policy1_->initialize();
+
+  // Initialize ONNX framework
+  policy2_ = std::make_shared<OnnxWrapper>(model_file2);
+  policy2_->initialize();
+
+  // Initialize ONNX framework
+  policy3_ = std::make_shared<OnnxWrapper>(model_file3);
+  policy3_->initialize();
 
   // Retrieve info about network
-  obsDim_ = policy_->get_obsDim();
-  actDim_ = policy_->get_actDim();
+  obsDim_ = policy1_->get_obsDim();
+  actDim_ = policy1_->get_actDim();
 
   std::cout << "Network parameters: " << std::endl;
   std::cout << "obsDim: " << obsDim_ << " | actDim: " << actDim_ << std::endl;
@@ -207,10 +224,17 @@ void Interface::initialize(std::basic_string<ORTCHAR_T> model_file,
   t_end_ = std::chrono::steady_clock::now();
 }
 
-Vxf Interface::forward() {
+Vxf Interface::forward(const int &select) {
 
   // Compute policy actions
-  actions_ = policy_->run(obs_);
+  switch (select) {
+    case ORIGIN_TO_BOX:
+    actions_ = policy1_->run(obs_); break;
+    case BOX_TO_TABLE:
+    actions_ = policy2_->run(obs_); break;
+    case TABLE_TO_ORIGIN:
+    actions_ = policy3_->run(obs_);
+  }
 
   // Target joint positions based on scaled actions
   assert(q_ref_.rows() == actDim_);
@@ -260,22 +284,20 @@ void Interface::update_full_body_observation(
     const Vector19 &pos, const Vector19 &vel, const Vector19 &tau,
     const Vector3 &obj_pos, const Vector3 &obj_rot0, const Vector3 &obj_rot1,
     const Vector3 &rpy, const Vector3 &gyro,
-    float time) {
+    const float &mimic_phase, const float &gait_phase) {
   // Log time
   t_start_ = std::chrono::steady_clock::now();
 
-  const float total_duration_mimic = 11.66666;//8.33333;
-  float phi_mimic = 2 * pi_v * (time / total_duration_mimic);
-
-  const float total_duration_gait = 1.00;
-  float phi_gait = 2 * pi_v * (time / total_duration_gait);
+  float phi_mimic = 2 * pi_v * mimic_phase;
+  float phi_gait = 2 * pi_v * gait_phase;
 
   // safely end the episode
-  if ((time / total_duration_mimic) > 0.9)
-  {
-    phi_mimic = 2 * pi_v * (0.9);
-    phi_gait = 0;
-  }
+  // const float end_phase = 0.95;
+  // if (mimic_phase > end_phase)
+  // {
+  //   phi_mimic = 2 * pi_v * (end_phase);
+  //   phi_gait = 2 * pi_v * (0.9);
+  // }
 
   float roll = rpy(0);
   float pitch = rpy(1);
@@ -390,7 +412,7 @@ Vxf Interface::reorder_act(const Vxf &v) {
 Vxf Interface::forward_ManiSkill() {
 
   // Compute policy actions
-  actions_ = policy_->run(obs_);
+  actions_ = policy1_->run(obs_);
 
   // Target joint positions based on scaled actions
   assert(q_ref_.rows() == reorder_act(actions_).rows());

@@ -45,7 +45,9 @@ void NATNET_CALLCONV dataCallback(sFrameOfMocapData* data, void* pUserData);
 class HumanoidExample {
 public:
   HumanoidExample(const std::string &networkInterface = "",
-                  const std::string &model_file = "")
+                  const std::string &model_file1 = "",
+                  const std::string &model_file2 = "",
+                  const std::string &model_file3 = "")
       : mlpInterface_() {
     unitree::robot::ChannelFactory::Instance()->Init(0, networkInterface);
     std::cout << "Initialize channel factory." << std::endl;
@@ -56,7 +58,7 @@ public:
     //connectParams.serverAddress = "150.18.226.11";
     connectParams.serverAddress = "192.168.123.11";
     connectParams.localAddress = "0.0.0.0";  // ローカルのすべてのネットワークインターフェースを使用
-    connectParams.connectionType = ConnectionType_Multicast;
+    connectParams.connectionType = ConnectionType_Unicast;
     connectParams.serverDataPort = 1511;
 
     // サーバーに接続
@@ -97,7 +99,7 @@ public:
         &HumanoidExample::UpdateTables, this, false);
 
     // Scale the policy control gains
-    // kp_ *= 0.0;
+    kp_ *= 1.0;
     // kd_ *= 0.0;
     // kp_wait_ *= 0.0;
     // kd_wait_ *= 0.0;
@@ -107,8 +109,13 @@ public:
       joy_.initialize(control_dt_);
     }
 
+    int joystick_period_us = 0.001 * 1e6;
+    joystick_thread_ptr_ = unitree::common::CreateRecurrentThreadEx(
+        "joystick", UT_CPU_ID_NONE, joystick_period_us, &HumanoidExample::ReadJoystick,
+        this);
+
     // Create link with network interface
-    mlpInterface_.initialize(model_file, q_offsets_.head(19), control_dt_);
+    mlpInterface_.initialize(model_file1, model_file2, model_file3, q_offsets_.head(19), control_dt_);
     policy_out_ = Vxf::Zero(mlpInterface_.get_actDim());
 
     // Initialize tables for console display
@@ -160,6 +167,10 @@ public:
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
   void LowStateHandler(const void *message);
+
+  void ReadJoystick() {
+    joy_.update_v_ref();
+  }
 
   // Take decisions for the next commands and send them to the motor command
   // buffer
@@ -235,7 +246,6 @@ public:
 
         // Refresh joystick
         if (USE_JOYSTICK) {
-          joy_.update_v_ref();
           cmd_ = joy_.getVRef();
         } else {
           cmd_ = Vector6::Zero();
@@ -305,37 +315,59 @@ public:
         table_pose.position = Eigen::Vector3d(table2.x, table2.y, table2.z);
         table_pose.orientation = Eigen::Quaterniond(table2.qw, table2.qx, table2.qy, table2.qz);
 
-	Eigen::Vector3d box_in_base_pos, table_in_base_pos;
-	Eigen::Matrix3d box_in_base_rot, table_in_base_rot;
-	transform_to_base(robot_pose, box_pose, box_in_base_pos, box_in_base_rot);
-	transform_to_base(robot_pose, table_pose, table_in_base_pos, table_in_base_rot);
+        //std::cout << "BOX: " << box_pose.position.transpose() << std::endl;
+        //std::cout << "TABLE: " << robot_pose.position.transpose() << std::endl;
 
-	Vector3 _obj_in_base_pos, obj_in_base_rot0, obj_in_base_rot1;
-	bool observe_box = true;
-	if (observe_box)
-	{
-	  _obj_in_base_pos = box_in_base_pos.cast<float>();
-	  obj_in_base_rot0 = box_in_base_rot.row(0).cast<float>();
-	  obj_in_base_rot1 = box_in_base_rot.row(1).cast<float>();
-	}
-	else
-	{
-	  _obj_in_base_pos = table_in_base_pos.cast<float>();
-	  obj_in_base_rot0 = table_in_base_rot.row(0).cast<float>();
-	  obj_in_base_rot1 = table_in_base_rot.row(1).cast<float>();
-	}
+        Eigen::Vector3d box_in_base_pos, table_in_base_pos;
+        Eigen::Matrix3d box_in_base_rot, table_in_base_rot;
+        transform_to_base(robot_pose, box_pose, box_in_base_pos, box_in_base_rot);
+        transform_to_base(robot_pose, table_pose, table_in_base_pos, table_in_base_rot);
+
+        Vector3 _obj_in_base_pos, obj_in_base_rot0, obj_in_base_rot1;
+
+        const float total_duration_mimic1 = 11.66666; // box pick up
+        const float total_duration_mimic2 = 10.83333; // box carry and put down
+        const float total_duration_mimic3 = 15.0; // return to origin
+        const float total_duration_gait = 1.00;
+
+        // Compute gait and mimic phases
+        // select_mimic = TABLE_TO_ORIGIN;  // Force a phase for debug
+        float gait_phase_ = time_run_ / total_duration_gait;
+        float mimic_phase_;
+        switch (select_mimic) {
+          case ORIGIN_TO_BOX:
+            mimic_phase_ = time_run_ / total_duration_mimic1;
+            // Give box position to box-pickup policy
+            _obj_in_base_pos = box_in_base_pos.cast<float>();
+            obj_in_base_rot0 = box_in_base_rot.row(0).cast<float>();
+            obj_in_base_rot1 = box_in_base_rot.row(1).cast<float>();
+            break;
+          case BOX_TO_TABLE:
+            mimic_phase_ = (time_run_ - total_duration_mimic1) / total_duration_mimic2;
+            // Give table position to box-carry-and-put-down policy
+            _obj_in_base_pos = table_in_base_pos.cast<float>();
+            obj_in_base_rot0 = table_in_base_rot.row(0).cast<float>();
+            obj_in_base_rot1 = table_in_base_rot.row(1).cast<float>();
+            break;
+          case TABLE_TO_ORIGIN:
+            mimic_phase_ = (time_run_ - total_duration_mimic1 - total_duration_mimic2) / total_duration_mimic3;
+            // Give table position to return-to-origin policy
+            _obj_in_base_pos = table_in_base_pos.cast<float>();
+            obj_in_base_rot0 = table_in_base_rot.row(0).cast<float>();
+            obj_in_base_rot1 = table_in_base_rot.row(1).cast<float>();
+        }
 
         mlpInterface_.update_full_body_observation(pos.head(19), vel.head(19), tau.head(19),
                                                    _obj_in_base_pos, obj_in_base_rot0, obj_in_base_rot1,
                                                    rpy, gyro,
-                                                   time_run_);
-        
+                                                   mimic_phase_, gait_phase_);
+
         // Inference to get position targets from the policy (Mujoco)
-        policy_out_ = mlpInterface_.forward();
+        policy_out_ = mlpInterface_.forward(select_mimic);
 
         // Check policy output size
         //assert(policy_out_.rows() == 10);
-	assert(policy_out_.rows() == mlpInterface_.get_actDim());
+	      assert(policy_out_.rows() == mlpInterface_.get_actDim());
 
         // Logging policy output
         for (int i = 0; i < policy_out_.rows(); ++i) {
@@ -353,6 +385,25 @@ public:
           motor_command_tmp.dq_ref.at(moti[i]) = 0.f;
           motor_command_tmp.tau_ff.at(moti[i]) = 0.f;
         }
+
+        // Switch to next phase is current one is 99% complete
+        if (mimic_phase_ > 0.99)
+        {
+          switch (select_mimic) {
+            case ORIGIN_TO_BOX:
+              select_mimic = BOX_TO_TABLE;
+              break;
+            case BOX_TO_TABLE:
+              // Switch to return to origin
+              select_mimic = TABLE_TO_ORIGIN;
+              break;
+            case TABLE_TO_ORIGIN:
+              // Switch to box pick up to restart the loop
+              time_run_ = -control_dt_;
+              select_mimic = ORIGIN_TO_BOX;
+          }
+        }
+
         break;
       }
       case STATUS_WAITING_AIR: {
@@ -381,7 +432,6 @@ public:
 
         bool start = true;
         if (USE_JOYSTICK) {
-          joy_.update_v_ref();
           start = (joy_.getStart()==1);
         }
 
@@ -554,6 +604,7 @@ private:
   const float control_dt_ = 0.025f;
 
   int status_ = STATUS_INIT;
+  int select_mimic = ORIGIN_TO_BOX;
 
   // Default configuration
   // for walk and pickup
@@ -586,7 +637,7 @@ private:
   const Vector20 qdot_limit{
       8, 8, 8, 8, 8,
       8, 8, 8, 8, 8,  // Legs
-      4,  // Torso
+      8,  // Torso
       12, 12, 12, 12,
       12, 12, 12, 12, // Arms
       0 // Unsused joint
@@ -602,7 +653,8 @@ private:
 
   Vector20 kd_{10.0, 10.0, 10.0, 10.0, 4.0, 10.0, 10.0, 10.0, 10.0, 4.0, // Legs
                4.0, // Torso
-	       2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, // Arms
+	       // 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, // Arms
+	       4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, // Arms
                0.0}; 
 
   Vector20 kp_wait_{1500.0, 1500.0, 1500.0, 1500.0, 1500.0,
@@ -645,6 +697,7 @@ private:
   unitree::common::ThreadPtr command_writer_ptr_;
   unitree::common::ThreadPtr control_thread_ptr_;
   unitree::common::ThreadPtr report_sensors_ptr_;
+  unitree::common::ThreadPtr joystick_thread_ptr_;
 
   // Table for console display
   fort::char_table table_IMU_;
@@ -1056,4 +1109,21 @@ void NATNET_CALLCONV dataCallback(sFrameOfMocapData* data, void* pUserData)
       };
       instance->latestRigidBodies_[rb.ID] = rbData;
   }
+
+  // // compute pose of box in base frame here
+  // const auto& torso = instance->latestRigidBodies_[2]; // streaming-id of marker
+  // const auto& box = instance->latestRigidBodies_[5]; // streaming-id of box
+  // const auto& table2 = instance->latestRigidBodies_[4]; // streaming-id of table2
+  // auto robot_position = Eigen::Vector3d(torso.x, torso.y, torso.z);
+  // auto robot_orientation = Eigen::Quaterniond(torso.qw, torso.qx, torso.qy, torso.qz);
+  // auto object_position = Eigen::Vector3d(table2.x, table2.y, table2.z);
+  // auto object_orientation = Eigen::Quaterniond(table2.qw, table2.qx, table2.qy, table2.qz);
+  // Eigen::Quaterniond q_robot_inv = robot_orientation.inverse();
+  // Eigen::Vector3d obj_in_robot_pos = q_robot_inv * (object_position - robot_position);
+  // Eigen::Quaterniond obj_in_robot_ori = q_robot_inv * object_orientation;
+  // Eigen::Matrix3d rot = obj_in_robot_ori.toRotationMatrix();
+  // std::cout << "---" << std::endl;
+  // std::cout << obj_in_robot_pos.transpose() << std::endl;
+  // std::cout << rot.row(0) << std::endl;
+  // std::cout << rot.row(1) << std::endl;
 }
