@@ -164,3 +164,12 @@ In real emergency you can also Ctrl+C to kill all control.
 - Don't play to much with the joints because it creates back-currents when you move the joints manually. If the electronics
 is well designed there are resistances made to dissipate the rise of voltage in the capacitors, but better be safe than sorry. 
 
+## Side note
+
+For a good omnidirectional walking policy on flat ground, get on the following commit, compile then run the policy. Validate first in simulation to be sure.
+ 
+66d6d4a (HEAD -> devel-PA) Various changes for threads, control logic, gains, security checks
+./bin/h1_low_level_example enx04ab18ffbad8 ~/Documents/pa-policies/2025-04-21_19-55-39_final_ckpt.onnx
+
+There is no Kp scaling as argument for this commit.
+
