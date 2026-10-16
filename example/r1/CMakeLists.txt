@@ -9,8 +9,14 @@ target_link_libraries(r1_ankle_swing_example unitree_sdk2)
 add_executable(r1_audio_client_example  audio/r1_audio_client_example.cpp)
 target_link_libraries(r1_audio_client_example unitree_sdk2)
 
-add_executable(r1A_wrist_swing_example low_level/r1A_wrist_swing_example.cpp)
-target_link_libraries(r1A_wrist_swing_example unitree_sdk2)
+add_executable(r1_A5_wrist_swing_example low_level/r1_A5_wrist_swing_example.cpp)
+target_link_libraries(r1_A5_wrist_swing_example unitree_sdk2)
+
+add_executable(r1_A7_wrist_swing_example low_level/r1_A7_wrist_swing_example.cpp)
+target_link_libraries(r1_A7_wrist_swing_example unitree_sdk2)
 
 add_executable(r1_arm_sdk_dds_example high_level/r1_arm_sdk_dds_example.cpp)
 target_link_libraries(r1_arm_sdk_dds_example unitree_sdk2 fmt)
+
+add_executable(r1_arm_action_example high_level/r1_arm_action_example.cpp)
+target_link_libraries(r1_arm_action_example unitree_sdk2)
