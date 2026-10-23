@@ -5,7 +5,7 @@
 #include <thread>
 #include <pthread.h>
 #include <stdexcept>
-#include <unitree/robot/a2/sport/sport_client.hpp>
+#include <unitree/robot/as2/sport/sport_client.hpp>
 
 using namespace std;
 
@@ -29,6 +29,35 @@ const vector<TestOption> option_list =
         {"recovery_switch", 9},
         {"body_height", 10},
         {"stand_up", 11},
+        
+        // Caution:  test in open area
+        {"enter_leftside_gait", 12},
+        {"exit_leftside_gait", 13},
+        {"enter_handstand", 14},
+        {"exit_handstand", 15},
+        {"front_flip", 16},
+        {"back_flip", 17},
+        {"pose", 18},
+        {"euler", 19},
+
+        {"switch_joystick", 20},
+
+        {"enter_biped_stand", 21},
+        {"exit_biped_stand", 22},
+        {"enter_rightside_gait", 23},
+        {"exit_rightside_gait", 24},
+        {"greeting", 25},
+        {"heart", 26},
+        {"content", 27},
+        {"dance1", 28},
+        {"dance2", 29},
+        {"handshake", 30},
+        {"stretch", 31},
+        {"enter_sit", 32},
+        {"exit_sit", 33},
+        {"front_jump", 34},
+        {"push_up", 35},
+        {"up_jump", 36},
 
 };
 
@@ -94,7 +123,7 @@ int main(int argc, char **argv)
     TestOption test_option;
     test_option.id = 1;
 
-    unitree::robot::a2::SportClient sport_client;
+    unitree::robot::as2::SportClient sport_client;
     sport_client.SetTimeout(25.0f);
     sport_client.Init();
 
@@ -164,6 +193,106 @@ int main(int argc, char **argv)
         else if (test_option.id == 11)
         {
             res = sport_client.StandUp();
+        }
+        else if (test_option.id == 12)
+        {
+            res = sport_client.LeftSideGait(1);
+        }
+        else if (test_option.id == 13)
+        {
+            res = sport_client.LeftSideGait(0);
+        }
+        else if (test_option.id == 14)
+        {
+            res = sport_client.HandStand(1);
+        }
+        else if (test_option.id == 15)
+        {
+            res = sport_client.HandStand(0);
+        }
+        else if (test_option.id == 16)
+        {
+            res = sport_client.FrontFlip();
+        }
+        else if (test_option.id == 17)
+        {
+            res = sport_client.BackFlip();
+        }
+        else if (test_option.id == 18)
+        {
+            res = sport_client.BodyPosition(0.2f, 0.2f, -0.2f, 0.2f);
+        }
+        else if (test_option.id == 19)
+        {
+            res = sport_client.Euler(0.2f, 0.3f, 0.3f);
+        }
+        else if (test_option.id == 20)
+        {
+            res = sport_client.SwitchJoystick(0);
+        }
+        else if (test_option.id == 21)
+        {
+            res = sport_client.BipedStand(1);
+        }
+        else if (test_option.id == 22)
+        {
+            res = sport_client.BipedStand(0);
+        }
+        else if (test_option.id == 23)
+        {
+            res = sport_client.RightSideGait(1);
+        }
+        else if (test_option.id == 24)
+        {
+            res = sport_client.RightSideGait(0);
+        }
+        else if (test_option.id == 25)
+        {
+            res = sport_client.Greeting();
+        }
+        else if (test_option.id == 26)
+        {
+            res = sport_client.Heart();
+        }
+        else if (test_option.id == 27)
+        {
+            res = sport_client.Content();
+        }
+        else if (test_option.id == 28)
+        {
+            res = sport_client.Dance1();
+        }
+        else if (test_option.id == 29)
+        {
+            res = sport_client.Dance2();
+        }
+        else if (test_option.id == 30)
+        {
+            res = sport_client.Handshake();
+        }
+        else if (test_option.id == 31)
+        {
+            res = sport_client.Stretch();
+        }
+        else if (test_option.id == 32)
+        {
+            res = sport_client.Sit(1);
+        }
+        else if (test_option.id == 33)
+        {
+            res = sport_client.Sit(0);
+        }
+        else if (test_option.id == 34)
+        {
+            res = sport_client.FrontJump();
+        }
+        else if (test_option.id == 35)
+        {
+            res = sport_client.PushUp();
+        }
+        else if (test_option.id == 36)
+        {
+            res = sport_client.UpJump();
         }
 
 

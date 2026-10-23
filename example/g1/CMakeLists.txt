@@ -16,6 +16,9 @@ target_link_libraries(g1_audio_client_example unitree_sdk2)
 add_executable(g1_dex3_example dex3/g1_dex3_example.cpp)
 target_link_libraries(g1_dex3_example unitree_sdk2)
 
+add_executable(g1_userctrl_dds_example high_level/g1_userctrl_dds_example.cpp)
+target_link_libraries(g1_userctrl_dds_example unitree_sdk2)
+
 find_package(Boost COMPONENTS program_options)
 if(Boost_FOUND)
     add_executable(g1_termination low_level/terminations.cpp)
@@ -37,5 +40,17 @@ if(yaml-cpp_FOUND)
     endif()
 endif()
 
-add_executable(g1_agv_client_example agv/g1_agv_client_example.cpp)
+add_executable(g1_agv_client_example g1d/g1_agv_client_example.cpp)
 target_link_libraries(g1_agv_client_example unitree_sdk2)
+
+add_executable(g1d_arm_example g1d/g1d_arm_example.cpp)
+target_link_libraries(g1d_arm_example unitree_sdk2)
+
+add_executable(g1d_height_control g1d/g1d_height_control.cpp)
+target_link_libraries(g1d_height_control unitree_sdk2)
+
+add_executable(g1d_waist_example g1d/g1d_waist_example.cpp)
+target_link_libraries(g1d_waist_example unitree_sdk2)
+
+add_executable(g1_hand_sdk_example high_level/g1_hand_sdk_example.cpp)
+target_link_libraries(g1_hand_sdk_example unitree_sdk2)
